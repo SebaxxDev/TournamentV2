@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0f0f0f;
+  color: #cccccc;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px #2a2a2a inset;
+  -webkit-text-fill-color: #cccccc;
+  caret-color: #cccccc;
+}
+
+input[type="text"],
+input[type="password"] {
+  border-radius: 0.5rem;
+  background-clip: padding-box;
+}
+
+/* Scrollbar personalizado para toda la aplicacion */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #444444;
+  border-radius: 10px;
+  border: 2px solid #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D4AF37;
+}
+
+::-webkit-scrollbar-corner {
+  background: #1a1a1a;
+}

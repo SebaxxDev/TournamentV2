@@ -1,0 +1,459 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RolStaff {
+  ADMIN
+  DIRECTOR
+  SUPERVISOR
+  CAJERO
+  CROUPIER
+}
+
+enum EstadoTorneo {
+  BORRADOR
+  REGISTRO
+  EN_JUEGO
+  PAUSADO
+  FINALIZADO
+}
+
+enum EstadoMesa {
+  ACTIVA
+  PAUSADA
+  CERRADA
+  MESA_FINAL
+}
+
+enum EstadoInscripcion {
+  ACTIVO
+  ELIMINADO
+}
+
+enum TipoTransaccion {
+  BUY_IN
+  RE_BUY
+  ADD_ON
+  PROPINA
+  PAYOUT
+  DEVOLUCION
+}
+
+enum MedioPago {
+  EFECTIVO
+  DEBITO
+  CREDITO
+  TRANSFERENCIA
+}
+
+enum TipoNivel {
+  NIVEL
+  BREAK
+  REGISTRO
+  COLOR_UP
+}
+
+model Staff {
+  id_staff        Int       @id @default(autoincrement())
+  username        String    @unique @db.VarChar(50)
+  password_hash   String    @db.VarChar(255)
+  nombre_completo String    @db.VarChar(100)
+  rol             RolStaff
+  activo          Boolean   @default(true)
+  eliminado       Boolean   @default(false)
+  eliminado_at    DateTime?
+  email           String?   @db.VarChar(100)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  torneos_supervisados     Torneo[]                @relation("SupervisorTorneo")
+  sesiones                 SesionStaff[]
+  transacciones            Transaccion[]           @relation("StaffTransaccion")
+  transacciones_anuladas   Transaccion[]           @relation("StaffAnulacion")
+  pagos_autorizados        PagoPremio[]            @relation("StaffAutoriza")
+  pagos_entregados         PagoPremio[]            @relation("StaffEntrega")
+  inscripciones_eliminadas Inscripcion[]           @relation("StaffEliminacion")
+  historial_estados        HistorialEstadoTorneo[]
+  asignaciones_torneo      TorneoStaff[]
+  auditoria                Auditoria[]
+
+  @@map("staff")
+}
+
+model SesionStaff {
+  id_sesion        Int      @id @default(autoincrement())
+  id_staff         Int
+  token_hash       String   @db.VarChar(255)
+  ip_origen        String?  @db.VarChar(45)
+  fecha_inicio     DateTime @default(now())
+  fecha_expiracion DateTime
+  activa           Boolean  @default(true)
+
+  staff Staff @relation(fields: [id_staff], references: [id_staff])
+
+  @@map("sesion_staff")
+}
+
+model Jugador {
+  rut                String    @id @db.VarChar(12)
+  nombre_completo    String    @db.VarChar(100)
+  email              String?   @db.VarChar(100)
+  telefono           String?   @db.VarChar(20)
+  nacionalidad       String?   @db.VarChar(50)
+  profesion          String?   @db.VarChar(100)
+  genero             String?   @db.VarChar(20)
+  domicilio          String?   @db.VarChar(255)
+  fecha_nacimiento   DateTime? @db.Date
+  activo             Boolean   @default(true)
+  lista_negra        Boolean   @default(false)
+  motivo_lista_negra String?   @db.Text
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  inscripciones   Inscripcion[]
+  puntos_circuito CircuitoPuntosJugador[]
+
+  @@map("jugador")
+}
+
+model CatalogoJuego {
+  id_tipo_juego Int     @id @default(autoincrement())
+  nombre        String  @db.VarChar(50)
+  descripcion   String? @db.Text
+  activo        Boolean @default(true)
+
+  torneos Torneo[]
+
+  @@map("catalogo_juego")
+}
+
+model CatalogoFicha {
+  id_ficha   Int      @id @default(autoincrement())
+  nombre     String   @db.VarChar(50)
+  color      String   @db.VarChar(30)
+  img_path   String   @db.VarChar(500)
+  activo     Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  @@map("catalogo_ficha")
+}
+
+model EsquemaPremio {
+  id_esquema  Int      @id @default(autoincrement())
+  nombre      String   @db.VarChar(50)
+  descripcion String?  @db.Text
+  created_at  DateTime @default(now())
+
+  reglas  ReglaPremio[]
+  torneos Torneo[]
+
+  @@map("esquema_premio")
+}
+
+model ReglaPremio {
+  id_regla            Int     @id @default(autoincrement())
+  id_esquema          Int
+  rango_min_jugadores Int
+  rango_max_jugadores Int
+  posicion            Int
+  porcentaje          Decimal @db.Decimal(5, 2)
+
+  esquema EsquemaPremio @relation(fields: [id_esquema], references: [id_esquema], onDelete: Cascade)
+
+  @@map("regla_premio")
+}
+
+model Torneo {
+  id_torneo            Int          @id @default(autoincrement())
+  id_supervisor        Int
+  id_tipo_juego        Int
+  id_esquema_premio    Int?
+  nombre               String       @db.VarChar(100)
+  fecha_inicio         DateTime
+  estado               EstadoTorneo @default(BORRADOR)
+  buy_in_monto         Int
+  rake_monto           Int
+  rake_pct_inscripcion Decimal      @default(0) @db.Decimal(5, 2)
+  rake_pct_rebuy       Decimal      @default(0) @db.Decimal(5, 2)
+  rake_pct_addon       Decimal      @default(0) @db.Decimal(5, 2)
+  capacidad_maxima     Int?
+  minimo_inicio        Int?
+  tabla_pagos          Json?
+
+  reloj_segundos_torneo Int @default(0)
+  reloj_segundos_ciega  Int @default(0)
+  reloj_nivel_index     Int @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  supervisor     Staff          @relation("SupervisorTorneo", fields: [id_supervisor], references: [id_staff])
+  tipo_juego     CatalogoJuego  @relation(fields: [id_tipo_juego], references: [id_tipo_juego])
+  esquema_premio EsquemaPremio? @relation(fields: [id_esquema_premio], references: [id_esquema])
+
+  poker             Poker?
+  mesas             Mesa[]
+  inscripciones     Inscripcion[]
+  fichas            TorneoFicha[]
+  staff_asignado    TorneoStaff[]
+  historial_estados HistorialEstadoTorneo[]
+  pagos_premio      PagoPremio[]
+
+  @@map("torneo")
+}
+
+model HistorialEstadoTorneo {
+  id_historial    Int           @id @default(autoincrement())
+  id_torneo       Int
+  id_staff        Int?
+  estado_anterior EstadoTorneo?
+  estado_nuevo    EstadoTorneo
+  motivo          String?       @db.Text
+  fecha           DateTime      @default(now())
+
+  torneo Torneo @relation(fields: [id_torneo], references: [id_torneo], onDelete: Cascade)
+  staff  Staff? @relation(fields: [id_staff], references: [id_staff])
+
+  @@map("historial_estado_torneo")
+}
+
+model TorneoStaff {
+  id_asignacion Int      @id @default(autoincrement())
+  id_torneo     Int
+  id_staff      Int
+  rol_asignado  RolStaff
+  id_mesa       Int?
+  estado        String   @default("ACTIVO") @db.VarChar(20)
+  hora_ingreso  DateTime @default(now())
+
+  torneo Torneo @relation(fields: [id_torneo], references: [id_torneo], onDelete: Cascade)
+  staff  Staff  @relation(fields: [id_staff], references: [id_staff])
+  mesa   Mesa?  @relation(fields: [id_mesa], references: [id_mesa], onDelete: SetNull)
+
+  @@map("torneo_staff")
+}
+
+model TorneoFicha {
+  id_ficha             Int     @id @default(autoincrement())
+  id_torneo            Int
+  nombre               String  @db.VarChar(50)
+  color                String? @db.VarChar(30)
+  nombre_color         String? @db.VarChar(30)
+  valor                Int
+  cantidad_por_jugador Int     @default(0)
+  cantidad_total       Int     @default(0)
+  img_path             String? @db.VarChar(500)
+
+  torneo Torneo @relation(fields: [id_torneo], references: [id_torneo], onDelete: Cascade)
+
+  @@map("torneo_ficha")
+}
+
+model Mesa {
+  id_mesa     Int        @id @default(autoincrement())
+  id_torneo   Int
+  numero_mesa Int
+  capacidad   Int        @default(10)
+  estado      EstadoMesa @default(ACTIVA)
+  updated_at  DateTime   @updatedAt
+
+  torneo   Torneo        @relation(fields: [id_torneo], references: [id_torneo])
+  asientos Asiento[]
+  staff    TorneoStaff[]
+
+  @@map("mesa")
+}
+
+model Asiento {
+  id_asiento     Int  @id @default(autoincrement())
+  id_mesa        Int
+  numero_asiento Int
+  id_inscripcion Int?
+
+  mesa        Mesa         @relation(fields: [id_mesa], references: [id_mesa])
+  inscripcion Inscripcion? @relation(fields: [id_inscripcion], references: [id_inscripcion])
+
+  @@map("asiento")
+}
+
+model Inscripcion {
+  id_inscripcion       Int               @id @default(autoincrement())
+  id_torneo            Int
+  rut_jugador          String            @db.VarChar(12)
+  folio                Int?
+  estado               EstadoInscripcion @default(ACTIVO)
+  pos_final            Int?
+  gano_premio          Boolean           @default(false)
+  monto_premio         Int               @default(0)
+  ronda_eliminacion    String?           @db.VarChar(50)
+  tiene_free_chip      Boolean           @default(false)
+  historial_rebuys     Json              @default("[]")
+  fecha_eliminacion    DateTime?
+  id_staff_eliminacion Int?
+  created_at           DateTime          @default(now())
+  updated_at           DateTime          @updatedAt
+
+  torneo            Torneo      @relation(fields: [id_torneo], references: [id_torneo])
+  jugador           Jugador     @relation(fields: [rut_jugador], references: [rut])
+  staff_eliminacion Staff?      @relation("StaffEliminacion", fields: [id_staff_eliminacion], references: [id_staff])
+  transacciones     Transaccion[]
+  asientos          Asiento[]
+  pago_premio       PagoPremio?
+  puntos_circuito   CircuitoPuntosJugador[]
+
+  @@map("inscripcion")
+}
+
+model Transaccion {
+  id_transaccion   Int             @id @default(autoincrement())
+  id_inscripcion   Int
+  id_staff         Int
+  tipo             TipoTransaccion
+  monto            Int
+  medio_pago       MedioPago
+  anulada          Boolean         @default(false)
+  motivo_anulacion String?         @db.Text
+  anulada_por      Int?
+  fecha_hora       DateTime        @default(now())
+
+  inscripcion     Inscripcion @relation(fields: [id_inscripcion], references: [id_inscripcion])
+  staff           Staff       @relation("StaffTransaccion", fields: [id_staff], references: [id_staff])
+  staff_anulacion Staff?      @relation("StaffAnulacion", fields: [anulada_por], references: [id_staff])
+
+  @@map("transaccion")
+}
+
+model PagoPremio {
+  id_pago_premio    Int       @id @default(autoincrement())
+  id_inscripcion    Int       @unique
+  id_torneo         Int
+  id_staff_autoriza Int
+  id_staff_entrega  Int
+  monto             Int
+  medio_pago        MedioPago
+  observacion       String?   @db.Text
+  fecha_pago        DateTime  @default(now())
+
+  inscripcion    Inscripcion @relation(fields: [id_inscripcion], references: [id_inscripcion])
+  torneo         Torneo      @relation(fields: [id_torneo], references: [id_torneo])
+  staff_autoriza Staff       @relation("StaffAutoriza", fields: [id_staff_autoriza], references: [id_staff])
+  staff_entrega  Staff       @relation("StaffEntrega", fields: [id_staff_entrega], references: [id_staff])
+
+  @@map("pago_premio")
+}
+
+model Poker {
+  id_poker            Int  @id @default(autoincrement())
+  id_torneo           Int  @unique
+  id_plantilla_origen Int?
+
+  ultimo_nivel_registro Int     @default(0)
+  stack_inicial_valor   Int     @default(0)
+
+  rebuy_permitido    Boolean @default(false)
+  rebuy_nivel_inicio Int     @default(0)
+  rebuy_nivel_final  Int     @default(0)
+  rebuy_precio       Decimal @default(0) @db.Decimal(10, 2)
+  rebuy_fichas       Int     @default(0)
+
+  addon_permitido    Boolean @default(false)
+  addon_nivel_inicio Int     @default(0)
+  addon_nivel_final  Int     @default(0)
+  addon_precio       Decimal @default(0) @db.Decimal(10, 2)
+  addon_fichas       Int     @default(0)
+
+  free_chip_permitido    Boolean @default(false)
+  free_chip_fichas       Int     @default(0)
+  free_chip_nivel_inicio Int     @default(0)
+  free_chip_nivel_final  Int     @default(0)
+
+  timebank_permitido  Boolean @default(false)
+  timebank_n_tarjetas Int     @default(0)
+  timebank_tiempo     Int     @default(0)
+
+  puntos_circuito      Boolean @default(false)
+  puntos_multiplicador Decimal @default(1.0) @db.Decimal(4, 2)
+  puntos_snapshot      Json?
+
+  torneo           Torneo             @relation(fields: [id_torneo], references: [id_torneo], onDelete: Cascade)
+  plantilla_origen CircuitoPlantilla? @relation(fields: [id_plantilla_origen], references: [id_plantilla])
+  niveles          PokerNivel[]
+
+  @@map("poker")
+}
+
+model PokerNivel {
+  id_nivel        Int       @id @default(autoincrement())
+  id_poker        Int
+  numero_nivel    Int
+  tipo            TipoNivel @default(NIVEL)
+  sb              Int       @default(0)
+  bb              Int       @default(0)
+  ante            Int       @default(0)
+  tiempo_segundos Int
+
+  poker Poker @relation(fields: [id_poker], references: [id_poker], onDelete: Cascade)
+
+  @@map("poker_nivel")
+}
+
+model CircuitoPlantilla {
+  id_plantilla         Int      @id @default(autoincrement())
+  nombre               String   @db.VarChar(100)
+  puntos_participacion Decimal  @default(0) @db.Decimal(10, 2)
+  top_bonus_cantidad   Int      @default(0)
+  created_at           DateTime @default(now())
+
+  detalles CircuitoPlantillaDetalle[]
+  torneos  Poker[]
+
+  @@map("circuito_plantilla")
+}
+
+model CircuitoPlantillaDetalle {
+  id_detalle       Int     @id @default(autoincrement())
+  id_plantilla     Int
+  posicion         Int
+  puntos_puesto    Decimal @default(0) @db.Decimal(10, 2)
+  porcentaje_extra Decimal @default(0) @db.Decimal(5, 2)
+
+  plantilla CircuitoPlantilla @relation(fields: [id_plantilla], references: [id_plantilla], onDelete: Cascade)
+
+  @@map("circuito_plantilla_detalle")
+}
+
+model CircuitoPuntosJugador {
+  id_registro    Int      @id @default(autoincrement())
+  rut_jugador    String   @db.VarChar(12)
+  id_inscripcion Int
+  posicion_final Int
+  puntos_ganados Decimal  @default(0) @db.Decimal(10, 2)
+  fecha_registro DateTime @default(now())
+
+  jugador     Jugador     @relation(fields: [rut_jugador], references: [rut], onDelete: Cascade)
+  inscripcion Inscripcion @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
+
+  @@map("circuito_puntos_jugador")
+}
+
+model Auditoria {
+  id_auditoria   Int      @id @default(autoincrement())
+  id_staff       Int?
+  accion         String   @db.VarChar(100)
+  tabla_afectada String?  @db.VarChar(50)
+  id_registro    Int?
+  valor_anterior Json?
+  valor_nuevo    Json?
+  ip_origen      String?  @db.VarChar(45)
+  descripcion    String?  @db.Text
+  fecha          DateTime @default(now())
+
+  staff Staff? @relation(fields: [id_staff], references: [id_staff])
+
+  @@map("auditoria")
+}

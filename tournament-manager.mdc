@@ -1,0 +1,106 @@
+# Tournament Manager — Reglas del Proyecto
+
+## Contexto
+Sistema de gestión de torneos de casino desarrollado para Casino Dreams Valdivia como proyecto real y tesis de Ingeniería Civil Informática.
+
+El sistema debe ser profesional, escalable y preparado para expansión futura a múltiples casinos.
+
+---
+
+## Prioridades Absolutas
+
+1. Seguridad sobre cualquier otra prioridad.
+2. Mantener arquitectura limpia y mantenible.
+3. No romper funcionalidades existentes.
+4. Explicar cambios complejos antes de implementarlos.
+5. Mantener consistencia visual y estructural.
+
+---
+
+## Reglas Generales
+
+- Todo el código y UI deben estar en español cuando sea posible.
+- No usar emojis.
+- No agregar comentarios que sugieran uso de IA.
+- No agregar dependencias innecesarias.
+- Mantener diseño visual estilo casino moderno.
+- Priorizar responsive y accesibilidad.
+- Validar inputs siempre.
+- Mantener tipado estricto cuando aplique.
+- Seguir patrones existentes antes de crear nuevos.
+
+---
+
+## Frontend
+
+Stack principal:
+- React + Vite
+- Tailwind CSS v3
+- Zustand
+- TanStack Query
+- React Hook Form + Zod
+
+Reglas:
+- Componentes en PascalCase.
+- Variables y funciones en camelCase.
+- Reutilizar componentes existentes antes de crear nuevos.
+- Mantener diseño consistente con Dreams.
+- Usar react-icons/fi.
+- Evitar lógica compleja dentro de JSX.
+
+---
+
+## Backend
+
+Stack principal:
+- Node.js + Express
+- Prisma
+- PostgreSQL
+- JWT HttpOnly
+- Zod
+
+Reglas:
+- Controllers sin lógica de validación.
+- Validaciones mediante Zod.
+- Respuestas API estándar:
+  { ok, datos }
+  { ok, codigo, mensaje }
+
+- Mantener middlewares desacoplados.
+- Priorizar transacciones seguras.
+- Nunca usar localStorage para auth.
+
+---
+
+## Base de Datos
+
+- snake_case en tablas y columnas.
+- Mantener integridad relacional.
+- Evitar duplicación de datos.
+- Soft delete donde ya exista patrón implementado.
+
+---
+
+## Convenciones Importantes
+
+- Zustand siempre con selectores:
+  useAuthStore((s) => s.usuario)
+
+- verificarRol usa rest params:
+  verificarRol('ADMIN', 'DIRECTOR')
+
+- Middleware auth:
+  verificarToken
+
+- Fetch mediante TanStack Query.
+- Estado global ligero mediante Zustand.
+
+---
+
+## Importante
+
+Antes de implementar:
+- revisar estructura actual,
+- reutilizar patrones existentes,
+- verificar impacto en seguridad,
+- evitar sobreingeniería.
