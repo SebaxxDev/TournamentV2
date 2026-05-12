@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '../../../services/api.js';
 import {
   DndContext,
   closestCenter,
@@ -20,6 +22,9 @@ import {
   FiPlus,
   FiTrash2,
   FiClock,
+  FiSave,
+  FiBookmark,
+  FiChevronDown,
 } from 'react-icons/fi';
 
 // ------------------------------------------------------------
@@ -43,6 +48,61 @@ const crearNivel = () => ({
 const crearBreak = () => ({
   id: nuevoId(), tipo: 'BREAK', sb: '', bb: '', ante: '', duracion: '', marcadores: [],
 });
+
+const marcadoresDesdeDb = (raw) => {
+  if (Array.isArray(raw)) return raw.filter((m) => typeof m === 'string');
+  return [];
+};
+
+const plantillaANiveles = (plantilla) => {
+  if (!plantilla?.detalles?.length) return [crearNivel()];
+  return [...plantilla.detalles]
+    .sort((a, b) => a.orden - b.orden)
+    .map((d) => ({
+      id: nuevoId(),
+      tipo: d.tipo === 'BREAK' ? 'BREAK' : 'NIVEL',
+      sb: d.sb ? String(d.sb) : '',
+      bb: d.bb ? String(d.bb) : '',
+      ante: d.ante ? String(d.ante) : '',
+      duracion: d.tiempo_segundos ? String(Math.round(Number(d.tiempo_segundos) / 60)) : '',
+      marcadores: marcadoresDesdeDb(d.marcadores),
+    }));
+};
+
+// ------------------------------------------------------------
+// Sub-modal nombrar plantilla
+// ------------------------------------------------------------
+const ModalNombrePlantilla = ({ onConfirmar, onCancelar }) => {
+  const [nombre, setNombre] = useState('');
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-dreams-surface border border-dreams-border rounded-2xl p-6 w-[340px] shadow-2xl flex flex-col gap-4">
+        <div>
+          <p className="text-base font-bold text-dreams-text">Nueva plantilla</p>
+          <p className="text-xs text-dreams-text-muted mt-0.5">Nombre para esta estructura de ciegas</p>
+        </div>
+        <input
+          autoFocus
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && nombre.trim() && onConfirmar(nombre.trim())}
+          placeholder="Ej: Turbo 15 min"
+          className="w-full bg-dreams-surface-2 border border-dreams-border rounded-lg px-3 py-2.5 text-sm text-dreams-text outline-none focus:border-dreams-gold/60 transition-all"
+        />
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onCancelar}
+            className="px-4 py-2 rounded-lg border border-dreams-border text-sm text-dreams-text-muted hover:text-dreams-text hover:border-dreams-gold/30 transition-all">
+            Cancelar
+          </button>
+          <button type="button" disabled={!nombre.trim()} onClick={() => onConfirmar(nombre.trim())}
+            className="px-4 py-2 rounded-lg bg-dreams-gold text-dreams-dark text-sm font-bold hover:bg-dreams-gold-light transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ------------------------------------------------------------
 // Badge de marcador (dentro de fila)
@@ -308,6 +368,60 @@ export default function ModalEstructuraCiegas({ opciones, nivelesIniciales, onGu
     (m) => !marcadoresEnUso.has(m.key)
   );
 
+  const queryClient = useQueryClient();
+  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
+  const [dropdownAbierto, setDropdownAbierto] = useState(false);
+  const [modalNombreAbierto, setModalNombreAbierto] = useState(false);
+
+  const { data: plantillas = [], isLoading: cargandoPlantillas } = useQuery({
+    queryKey: ['plantillas-ciegas'],
+    queryFn: async () => {
+      const res = await api.get('/plantillas-ciegas');
+      return res.data.datos;
+    },
+  });
+
+  const mutacionCrearPlantilla = useMutation({
+    mutationFn: ({ nombre, detalles }) => api.post('/plantillas-ciegas', { nombre, detalles }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['plantillas-ciegas'] });
+      setPlantillaSeleccionada(res.data.datos.id_plantilla);
+    },
+  });
+
+  const mutacionEliminarPlantilla = useMutation({
+    mutationFn: (id) => api.delete(`/plantillas-ciegas/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plantillas-ciegas'] });
+      setPlantillaSeleccionada(null);
+    },
+  });
+
+  const plantillaActual = plantillas.find((p) => p.id_plantilla === plantillaSeleccionada);
+
+  const estructuraListaParaPlantilla = niveles.length > 0 && todosLosMarcadoresColocados;
+
+  const cargarPlantilla = (plantilla) => {
+    setNiveles(plantillaANiveles(plantilla));
+    setPlantillaSeleccionada(plantilla.id_plantilla);
+    setSeleccionada(null);
+    setDropdownAbierto(false);
+  };
+
+  const confirmarGuardarPlantilla = (nombre) => {
+    const detalles = niveles.map((n, i) => ({
+      orden: i + 1,
+      tipo: n.tipo === 'BREAK' ? 'BREAK' : 'NIVEL',
+      sb: Number(n.sb) || 0,
+      bb: Number(n.bb) || 0,
+      ante: Number(n.ante) || 0,
+      tiempo_segundos: (Number(n.duracion) || 0) * 60,
+      marcadores: n.marcadores ?? [],
+    }));
+    mutacionCrearPlantilla.mutate({ nombre, detalles });
+    setModalNombreAbierto(false);
+  };
+
   const agregarNivel = () => {
     const nuevo = crearNivel();
     setNiveles((prev) => [...prev, nuevo]);
@@ -432,86 +546,177 @@ export default function ModalEstructuraCiegas({ opciones, nivelesIniciales, onGu
   const idsMarcadores = marcadoresDisponibles.map((m) => `marcador-${m.key}`);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onCerrar} />
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onCerrar} />
 
-      <div className="relative bg-dreams-surface border border-dreams-border rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl">
+        <div className="relative bg-dreams-surface border border-dreams-border rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl">
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-dreams-border flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-bold text-dreams-text">Estructura de Ciegas</h2>
-            {duracionTotal > 0 && (
-              <span className="flex items-center gap-1.5 text-xs text-dreams-text-muted bg-dreams-surface-2 border border-dreams-border px-2.5 py-1 rounded-full">
-                <FiClock size={11} />
-                {horas > 0 ? `${horas}h ` : ''}{minutos > 0 ? `${minutos}min` : ''}
-              </span>
-            )}
+          {/* Header */}
+          <div className="px-6 pt-6 pb-6 border-b border-dreams-border flex-shrink-0">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex-1 flex items-center gap-3 min-w-0 flex-wrap">
+                <h2 className="text-xl font-bold text-dreams-gold tracking-wide whitespace-nowrap">
+                  Estructura de Ciegas
+                </h2>
+
+                <div className="w-px h-5 bg-dreams-border flex-shrink-0" />
+
+                <div className="relative z-20 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setDropdownAbierto((v) => !v)}
+                    className={`
+                      flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-lg border text-sm transition-all
+                      ${plantillaActual
+                        ? 'border-dreams-gold/30 bg-dreams-gold/5 text-dreams-gold'
+                        : 'border-dreams-border bg-dreams-surface-2 text-dreams-text-muted hover:border-dreams-gold/30 hover:text-dreams-text'
+                      }
+                    `}
+                    style={{ minWidth: '175px' }}
+                  >
+                    <FiBookmark size={12} className="flex-shrink-0" />
+                    <span className="truncate flex-1 text-left text-sm" style={{ maxWidth: '120px' }}>
+                      {plantillaActual ? plantillaActual.nombre : 'Plantilla...'}
+                    </span>
+                    <FiChevronDown size={12} className={`flex-shrink-0 transition-transform ${dropdownAbierto ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {dropdownAbierto && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setDropdownAbierto(false)} />
+                      <div className="absolute top-full left-0 mt-1.5 z-20 bg-dreams-surface border border-dreams-border rounded-xl shadow-2xl overflow-hidden" style={{ minWidth: '220px' }}>
+                        <div className="px-3 py-2 border-b border-dreams-border">
+                          <p className="text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase">Plantillas guardadas</p>
+                        </div>
+                        {cargandoPlantillas ? (
+                          <div className="px-4 py-3 text-xs text-dreams-text-muted">Cargando...</div>
+                        ) : plantillas.length === 0 ? (
+                          <div className="px-4 py-4 text-xs text-dreams-text-muted text-center">Sin plantillas guardadas</div>
+                        ) : (
+                          <div className="py-1">
+                            {plantillas.map((p) => (
+                              <button
+                                key={p.id_plantilla}
+                                type="button"
+                                onClick={() => cargarPlantilla(p)}
+                                className={`
+                                  w-full text-left px-4 py-2.5 text-sm transition-all flex items-center gap-2
+                                  ${p.id_plantilla === plantillaSeleccionada
+                                    ? 'bg-dreams-gold/10 text-dreams-gold font-semibold'
+                                    : 'text-dreams-text hover:bg-dreams-surface-2'
+                                  }
+                                `}
+                              >
+                                {p.id_plantilla === plantillaSeleccionada
+                                  ? <span className="w-1.5 h-1.5 rounded-full bg-dreams-gold flex-shrink-0" />
+                                  : <span className="w-1.5 h-1.5 flex-shrink-0" />
+                                }
+                                {p.nombre}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => estructuraListaParaPlantilla && setModalNombreAbierto(true)}
+                  disabled={!estructuraListaParaPlantilla || mutacionCrearPlantilla.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-sm font-medium hover:bg-emerald-500/20 hover:border-emerald-500/70 active:scale-95 transition-all disabled:opacity-35 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  <FiSave size={12} />
+                  Guardar como plantilla
+                </button>
+
+                {plantillaSeleccionada && (
+                  <button
+                    type="button"
+                    onClick={() => mutacionEliminarPlantilla.mutate(plantillaSeleccionada)}
+                    disabled={mutacionEliminarPlantilla.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 text-sm font-medium hover:bg-red-500/20 hover:border-red-500/70 active:scale-95 transition-all disabled:opacity-35 disabled:cursor-not-allowed flex-shrink-0"
+                  >
+                    <FiTrash2 size={12} />
+                    Eliminar plantilla
+                  </button>
+                )}
+
+                {duracionTotal > 0 && (
+                  <span className="flex items-center gap-1.5 text-xs text-dreams-text-muted bg-dreams-surface-2 border border-dreams-border px-2.5 py-1 rounded-full flex-shrink-0">
+                    <FiClock size={11} />
+                    {horas > 0 ? `${horas}h ` : ''}{minutos > 0 ? `${minutos}min` : ''}
+                  </span>
+                )}
+              </div>
+
+              <button type="button" onClick={onCerrar}
+                className="text-dreams-text-muted hover:text-dreams-text hover:bg-dreams-surface-2 transition-all p-2 rounded-lg flex-shrink-0">
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <p className="text-xs text-dreams-text-muted max-w-xl min-w-0 leading-relaxed">
+                Ingresa cada nivel con SB, BB, ante y duración
+                <br />
+                Agrega breaks si lo necesitas y coloca los marcadores en la ronda correspondiente
+                <br />
+                para este torneo.
+              </p>
+              <div className="flex justify-center sm:justify-end flex-shrink-0">
+                <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={agregarNivel}
+                  className="
+                    group relative flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold
+                    bg-dreams-surface-2 border border-dreams-gold/30 text-dreams-gold
+                    hover:bg-dreams-gold hover:text-dreams-dark hover:border-dreams-gold
+                    transition-all duration-200 overflow-hidden
+                  "
+                >
+                  <FiPlus size={13} className="transition-transform group-hover:rotate-90 duration-200" />
+                  Agregar Ronda
+                </button>
+                <button
+                  type="button"
+                  onClick={agregarBreak}
+                  className="
+                    group relative flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold
+                    bg-dreams-surface-2 border border-red-500/30 text-red-400
+                    hover:bg-red-950 hover:border-red-500/60
+                    transition-all duration-200
+                  "
+                >
+                  <FiPlus size={13} className="transition-transform group-hover:rotate-90 duration-200" />
+                  Agregar Break
+                </button>
+                <button
+                  type="button"
+                  onClick={eliminarSeleccionada}
+                  disabled={!seleccionada}
+                  className="
+                    group flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold
+                    bg-dreams-surface-2 border border-dreams-border text-dreams-text-muted
+                    hover:border-red-500/40 hover:text-red-400 hover:bg-red-950/30
+                    transition-all duration-200
+                    disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-dreams-surface-2
+                    disabled:hover:border-dreams-border disabled:hover:text-dreams-text-muted
+                  "
+                >
+                  <FiTrash2 size={13} />
+                  Eliminar Ronda
+                </button>
+                </div>
+              </div>
+            </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {/* Agregar Ronda */}
-            <button
-              type="button"
-              onClick={agregarNivel}
-              className="
-                group relative flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold
-                bg-dreams-surface-2 border border-dreams-gold/30 text-dreams-gold
-                hover:bg-dreams-gold hover:text-dreams-dark hover:border-dreams-gold
-                transition-all duration-200 overflow-hidden
-              "
-            >
-              <FiPlus size={13} className="transition-transform group-hover:rotate-90 duration-200" />
-              Agregar Ronda
-            </button>
-
-            {/* Agregar Break */}
-            <button
-              type="button"
-              onClick={agregarBreak}
-              className="
-                group relative flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold
-                bg-dreams-surface-2 border border-red-500/30 text-red-400
-                hover:bg-red-950 hover:border-red-500/60
-                transition-all duration-200
-              "
-            >
-              <FiPlus size={13} className="transition-transform group-hover:rotate-90 duration-200" />
-              Agregar Break
-            </button>
-
-            {/* Eliminar Ronda */}
-            <button
-              type="button"
-              onClick={eliminarSeleccionada}
-              disabled={!seleccionada}
-              className="
-                group flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold
-                bg-dreams-surface-2 border border-dreams-border text-dreams-text-muted
-                hover:border-red-500/40 hover:text-red-400 hover:bg-red-950/30
-                transition-all duration-200
-                disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-dreams-surface-2
-                disabled:hover:border-dreams-border disabled:hover:text-dreams-text-muted
-              "
-            >
-              <FiTrash2 size={13} />
-              Eliminar Ronda
-            </button>
-
-            <div className="w-px h-5 bg-dreams-border mx-1" />
-
-            <button
-              type="button"
-              onClick={onCerrar}
-              className="p-1.5 rounded-lg text-dreams-text-muted hover:text-dreams-text hover:bg-dreams-surface-2 transition-all"
-            >
-              <FiX size={16} />
-            </button>
-          </div>
-        </div>
 
         {/* Cuerpo */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden min-h-0">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -652,5 +857,12 @@ export default function ModalEstructuraCiegas({ opciones, nivelesIniciales, onGu
         </div>
       </div>
     </div>
+    {modalNombreAbierto && (
+      <ModalNombrePlantilla
+        onConfirmar={confirmarGuardarPlantilla}
+        onCancelar={() => setModalNombreAbierto(false)}
+      />
+    )}
+    </>
   );
 }

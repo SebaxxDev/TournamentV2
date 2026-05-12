@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { FiX, FiTrash2, FiPlus, FiAlertCircle, FiLock, FiArrowRight } from 'react-icons/fi';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  FiX, FiTrash2, FiPlus, FiAlertCircle, FiLock, FiArrowRight,
+  FiSave, FiBookmark, FiChevronDown,
+} from 'react-icons/fi';
 import api from '../../../services/api.js';
 
 // ------------------------------------------------------------
@@ -43,6 +46,53 @@ const fichasAFilas = (fichas) => {
     cantidad_por_jugador: String(f.cantidad_por_jugador),
     cantidad_total: String(f.cantidad_total || ''),
   }));
+};
+
+// Convierte una plantilla del backend a filas del modal
+const plantillaAFilas = (plantilla) => {
+  if (!plantilla?.detalles || plantilla.detalles.length === 0) return [crearFila()];
+  return plantilla.detalles.map((d) => ({
+    id: nuevaFilaId(),
+    id_ficha_catalogo: d.id_ficha_catalogo,
+    valor: String(d.valor),
+    cantidad_por_jugador: String(d.cantidad_por_jugador),
+    cantidad_total: '',
+  }));
+};
+
+// ------------------------------------------------------------
+// Sub-modal nombrar plantilla
+// ------------------------------------------------------------
+const ModalNombrePlantilla = ({ onConfirmar, onCancelar }) => {
+  const [nombre, setNombre] = useState('');
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-dreams-surface border border-dreams-border rounded-2xl p-6 w-[340px] shadow-2xl flex flex-col gap-4">
+        <div>
+          <p className="text-base font-bold text-dreams-text">Nueva plantilla</p>
+          <p className="text-xs text-dreams-text-muted mt-0.5">Asigna un nombre para identificarla</p>
+        </div>
+        <input
+          autoFocus
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && nombre.trim() && onConfirmar(nombre.trim())}
+          placeholder="Ej: Stack Dreams 50K"
+          className="w-full bg-dreams-surface-2 border border-dreams-border rounded-lg px-3 py-2.5 text-sm text-dreams-text outline-none focus:border-dreams-gold/60 transition-all"
+        />
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onCancelar}
+            className="px-4 py-2 rounded-lg border border-dreams-border text-sm text-dreams-text-muted hover:text-dreams-text hover:border-dreams-gold/30 transition-all">
+            Cancelar
+          </button>
+          <button type="button" disabled={!nombre.trim()} onClick={() => onConfirmar(nombre.trim())}
+            className="px-4 py-2 rounded-lg bg-dreams-gold text-dreams-dark text-sm font-bold hover:bg-dreams-gold-light transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ------------------------------------------------------------
@@ -235,14 +285,42 @@ const PestanaFichasTotales = ({ filas, fichasCatalogo, capacidadMaxima, onCambia
 // Modal principal
 // ------------------------------------------------------------
 export default function ModalFichasStack({ capacidadMaxima, fichasIniciales, onGuardar, onCerrar }) {
+  const queryClient = useQueryClient();
   const [pestana, setPestana] = useState('stack');
   const [filas, setFilas] = useState(() => fichasAFilas(fichasIniciales));
+  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
+  const [dropdownAbierto, setDropdownAbierto] = useState(false);
+  const [modalNombreAbierto, setModalNombreAbierto] = useState(false);
 
   const { data: fichasCatalogo = [] } = useQuery({
     queryKey: ['fichas-catalogo'],
     queryFn: async () => {
       const res = await api.get('/fichas');
       return res.data.datos.filter((f) => f.activo);
+    },
+  });
+
+  const { data: plantillas = [], isLoading: cargandoPlantillas } = useQuery({
+    queryKey: ['plantillas-fichas'],
+    queryFn: async () => {
+      const res = await api.get('/plantillas-fichas');
+      return res.data.datos;
+    },
+  });
+
+  const mutacionCrearPlantilla = useMutation({
+    mutationFn: ({ nombre, detalles }) => api.post('/plantillas-fichas', { nombre, detalles }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['plantillas-fichas'] });
+      setPlantillaSeleccionada(res.data.datos.id_plantilla);
+    },
+  });
+
+  const mutacionEliminarPlantilla = useMutation({
+    mutationFn: (id) => api.delete(`/plantillas-fichas/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plantillas-fichas'] });
+      setPlantillaSeleccionada(null);
     },
   });
 
@@ -277,9 +355,33 @@ export default function ModalFichasStack({ capacidadMaxima, fichasIniciales, onG
 
   const stackDefinido = filas.some((f) => f.id_ficha_catalogo && f.valor && f.cantidad_por_jugador);
 
-  const handleConfirmarStack = () => {
-    setPestana('totales');
+  // ----------------------------------------------------------
+  // Plantillas
+  // ----------------------------------------------------------
+  const cargarPlantilla = (plantilla) => {
+    setFilas(plantillaAFilas(plantilla));
+    setPlantillaSeleccionada(plantilla.id_plantilla);
+    setDropdownAbierto(false);
   };
+
+  const confirmarGuardarPlantilla = (nombre) => {
+    const detalles = filas
+      .filter((f) => f.id_ficha_catalogo && f.valor && f.cantidad_por_jugador)
+      .map((f) => ({
+        id_ficha_catalogo: f.id_ficha_catalogo,
+        valor: Number(f.valor),
+        cantidad_por_jugador: Number(f.cantidad_por_jugador),
+      }));
+    mutacionCrearPlantilla.mutate({ nombre, detalles });
+    setModalNombreAbierto(false);
+  };
+
+  const plantillaActual = plantillas.find((p) => p.id_plantilla === plantillaSeleccionada);
+
+  // ----------------------------------------------------------
+  // Acciones principales
+  // ----------------------------------------------------------
+  const handleConfirmarStack = () => setPestana('totales');
 
   const handleGuardar = () => {
     const fichasValidas = filas
@@ -300,158 +402,265 @@ export default function ModalFichasStack({ capacidadMaxima, fichasIniciales, onG
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onCerrar} />
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onCerrar} />
 
-      <div className="relative bg-dreams-surface border border-dreams-border rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl">
+        <div className="relative bg-dreams-surface border border-dreams-border rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl">
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-dreams-border flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <h2 className="text-base font-bold text-dreams-text">Fichas y Stack</h2>
+          {/* Header */}
+          <div className="px-5 pt-5 pb-4 border-b border-dreams-border flex-shrink-0">
 
-            {/* Pestañas */}
-            <div className="flex bg-dreams-surface-2 border border-dreams-border rounded-lg p-0.5 gap-0.5">
-              {[
-                { key: 'stack',   label: 'Stack Inicial',  bloqueado: false },
-                { key: 'totales', label: 'Fichas Totales', bloqueado: !stackDefinido },
-              ].map((tab) => (
+            {/* Fila 1: título + plantillas + cerrar */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex-1 flex items-center gap-3 min-w-0 flex-wrap">
+                <h2 className="text-xl font-bold text-dreams-gold tracking-wide whitespace-nowrap">
+                  Fichas y Stack
+                </h2>
+
+                <div className="w-px h-5 bg-dreams-border flex-shrink-0" />
+
+                {/* Selector plantilla */}
+                <div className="relative z-20 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setDropdownAbierto((v) => !v)}
+                    className={`
+                      flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-lg border text-sm transition-all
+                      ${plantillaActual
+                        ? 'border-dreams-gold/30 bg-dreams-gold/5 text-dreams-gold'
+                        : 'border-dreams-border bg-dreams-surface-2 text-dreams-text-muted hover:border-dreams-gold/30 hover:text-dreams-text'
+                      }
+                    `}
+                    style={{ minWidth: '175px' }}
+                  >
+                    <FiBookmark size={12} className="flex-shrink-0" />
+                    <span className="truncate flex-1 text-left text-sm" style={{ maxWidth: '120px' }}>
+                      {plantillaActual ? plantillaActual.nombre : 'Plantilla...'}
+                    </span>
+                    <FiChevronDown size={12} className={`flex-shrink-0 transition-transform ${dropdownAbierto ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {dropdownAbierto && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setDropdownAbierto(false)} />
+                      <div className="absolute top-full left-0 mt-1.5 z-20 bg-dreams-surface border border-dreams-border rounded-xl shadow-2xl overflow-hidden" style={{ minWidth: '220px' }}>
+                        <div className="px-3 py-2 border-b border-dreams-border">
+                          <p className="text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase">Plantillas guardadas</p>
+                        </div>
+                        {cargandoPlantillas ? (
+                          <div className="px-4 py-3 text-xs text-dreams-text-muted">Cargando...</div>
+                        ) : plantillas.length === 0 ? (
+                          <div className="px-4 py-4 text-xs text-dreams-text-muted text-center">Sin plantillas guardadas</div>
+                        ) : (
+                          <div className="py-1">
+                            {plantillas.map((p) => (
+                              <button
+                                key={p.id_plantilla}
+                                type="button"
+                                onClick={() => cargarPlantilla(p)}
+                                className={`
+                                  w-full text-left px-4 py-2.5 text-sm transition-all flex items-center gap-2
+                                  ${p.id_plantilla === plantillaSeleccionada
+                                    ? 'bg-dreams-gold/10 text-dreams-gold font-semibold'
+                                    : 'text-dreams-text hover:bg-dreams-surface-2'
+                                  }
+                                `}
+                              >
+                                {p.id_plantilla === plantillaSeleccionada
+                                  ? <span className="w-1.5 h-1.5 rounded-full bg-dreams-gold flex-shrink-0" />
+                                  : <span className="w-1.5 h-1.5 flex-shrink-0" />
+                                }
+                                {p.nombre}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Guardar como plantilla */}
                 <button
-                  key={tab.key}
                   type="button"
-                  onClick={() => !tab.bloqueado && setPestana(tab.key)}
-                  title={tab.bloqueado ? 'Define primero el stack inicial' : ''}
-                  className={`
-                    flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all duration-150
-                    ${tab.bloqueado ? 'opacity-35 cursor-not-allowed text-dreams-text-muted' : ''}
-                    ${pestana === tab.key && !tab.bloqueado
-                      ? 'bg-dreams-gold text-dreams-dark'
-                      : !tab.bloqueado ? 'text-dreams-text-muted hover:text-dreams-text' : ''
-                    }
-                  `}
+                  onClick={() => stackDefinido && setModalNombreAbierto(true)}
+                  disabled={!stackDefinido || mutacionCrearPlantilla.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-sm font-medium hover:bg-emerald-500/20 hover:border-emerald-500/70 active:scale-95 transition-all disabled:opacity-35 disabled:cursor-not-allowed flex-shrink-0"
                 >
-                  {tab.bloqueado && <FiLock size={10} />}
-                  {tab.label}
+                  <FiSave size={12} />
+                  Guardar como plantilla
                 </button>
-              ))}
+
+                {/* Eliminar plantilla */}
+                {plantillaSeleccionada && (
+                  <button
+                    type="button"
+                    onClick={() => mutacionEliminarPlantilla.mutate(plantillaSeleccionada)}
+                    disabled={mutacionEliminarPlantilla.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 text-sm font-medium hover:bg-red-500/20 hover:border-red-500/70 active:scale-95 transition-all disabled:opacity-35 disabled:cursor-not-allowed flex-shrink-0"
+                  >
+                    <FiX size={12} />
+                    Eliminar plantilla
+                  </button>
+                )}
+              </div>
+
+              {/* Cerrar */}
+              <button type="button" onClick={onCerrar}
+                className="text-dreams-text-muted hover:text-dreams-text hover:bg-dreams-surface-2 transition-all p-2 rounded-lg flex-shrink-0">
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <p className="text-xs text-dreams-text-muted max-w-2xl">
+                Ingresa cada Ficha, su valor y la cantidad por jugador para este torneo
+              </p>
+              <div className="flex justify-center sm:justify-end flex-shrink-0">
+                <div className="inline-flex bg-dreams-surface-2 border border-dreams-border rounded-lg p-0.5 gap-0.5 shadow-sm">
+                  {[
+                    { key: 'stack',   label: 'Stack Inicial',  bloqueado: false },
+                    { key: 'totales', label: 'Fichas Totales', bloqueado: !stackDefinido },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => !tab.bloqueado && setPestana(tab.key)}
+                      title={tab.bloqueado ? 'Define primero el stack inicial' : ''}
+                      className={`
+                        flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all duration-150
+                        ${tab.bloqueado ? 'opacity-35 cursor-not-allowed text-dreams-text-muted' : ''}
+                        ${pestana === tab.key && !tab.bloqueado
+                          ? 'bg-dreams-gold text-dreams-dark'
+                          : !tab.bloqueado ? 'text-dreams-text-muted hover:text-dreams-text' : ''
+                        }
+                      `}
+                    >
+                      {tab.bloqueado && <FiLock size={10} />}
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          <button type="button" onClick={onCerrar}
-            className="p-1.5 rounded-lg text-dreams-text-muted hover:text-dreams-text hover:bg-dreams-surface-2 transition-all">
-            <FiX size={16} />
-          </button>
-        </div>
+          {/* Cuerpo */}
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            {pestana === 'stack' ? (
+              <div className="flex-1 overflow-y-auto min-h-0">
+                <table className="w-full border-collapse">
+                  <thead className="sticky top-0 bg-dreams-surface z-10">
+                    <tr className="border-b border-dreams-border">
+                      <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-left w-44">Ficha</th>
+                      <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-16">Imagen</th>
+                      <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-left w-36">Nombre</th>
+                      <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-28">Valor Unit</th>
+                      <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-28">Cant x Jugador</th>
+                      <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-32">Valor x Jugador</th>
+                      <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-28">Fichas Totales</th>
+                      <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-36">Valor Total</th>
+                      <th className="w-10" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filas.map((fila) => (
+                      <FilaFicha
+                        key={fila.id}
+                        fila={fila}
+                        fichasCatalogo={fichasCatalogo}
+                        fichasUsadas={fichasUsadas}
+                        capacidadMaxima={capacidadMaxima}
+                        onCambiar={cambiarCampo}
+                        onEliminar={eliminarFila}
+                      />
+                    ))}
+                    <tr>
+                      <td colSpan={9} className="px-3 py-2">
+                        <button type="button" onClick={agregarFila}
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dreams-gold/40 text-dreams-gold text-sm font-semibold hover:bg-dreams-gold/10 hover:border-dreams-gold/70 active:scale-[0.99] transition-all duration-150">
+                          <FiPlus size={15} />
+                          Agregar Ficha
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <PestanaFichasTotales
+                filas={filas}
+                fichasCatalogo={fichasCatalogo}
+                capacidadMaxima={capacidadMaxima}
+                onCambiarTotal={cambiarTotal}
+              />
+            )}
+          </div>
 
-        {/* Cuerpo */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {pestana === 'stack' ? (
-            <div className="flex-1 overflow-y-auto">
-              <table className="w-full border-collapse">
-                <thead className="sticky top-0 bg-dreams-surface z-10">
-                  <tr className="border-b border-dreams-border">
-                    <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-left w-44">Ficha</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-16">Imagen</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-left w-36">Nombre</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-28">Valor Unit</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-28">Cant x Jugador</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-32">Valor x Jugador</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-28">Fichas Totales</th>
-                    <th className="px-3 py-2.5 text-[10px] font-bold tracking-widest text-dreams-text-muted uppercase text-center w-36">Valor Total</th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filas.map((fila) => (
-                    <FilaFicha
-                      key={fila.id}
-                      fila={fila}
-                      fichasCatalogo={fichasCatalogo}
-                      fichasUsadas={fichasUsadas}
-                      capacidadMaxima={capacidadMaxima}
-                      onCambiar={cambiarCampo}
-                      onEliminar={eliminarFila}
-                    />
-                  ))}
-                  <tr>
-                    <td colSpan={9} className="px-3 py-2">
-                      <button type="button" onClick={agregarFila}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dreams-gold/40 text-dreams-gold text-sm font-semibold hover:bg-dreams-gold/10 hover:border-dreams-gold/70 active:scale-[0.99] transition-all duration-150">
-                        <FiPlus size={15} />
-                        Agregar Ficha
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <PestanaFichasTotales
-              filas={filas}
-              fichasCatalogo={fichasCatalogo}
-              capacidadMaxima={capacidadMaxima}
-              onCambiarTotal={cambiarTotal}
-            />
-          )}
-        </div>
+          {/* Footer */}
+          <div className="border-t border-dreams-border flex-shrink-0">
+            <div className="flex items-stretch">
 
-        {/* Footer */}
-        <div className="border-t border-dreams-border flex-shrink-0">
-          <div className="flex items-stretch">
-
-            {/* Panel resumen dorado */}
-            <div className="m-3 border border-dreams-gold/30 bg-dreams-gold/5 rounded-xl px-5 py-3 flex gap-8 items-center">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-6">
-                  <span className="text-[10px] text-dreams-gold/50 uppercase tracking-wider">Total fichas físicas</span>
-                  <span className="text-xs font-semibold text-dreams-text/70">{formatearNumero(resumen.totalFichasFisicas)}</span>
+              {/* Panel resumen dorado */}
+              <div className="m-3 border border-dreams-gold/30 bg-dreams-gold/5 rounded-xl px-5 py-3 flex gap-8 items-center">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-6">
+                    <span className="text-[10px] text-dreams-gold/50 uppercase tracking-wider">Total fichas físicas</span>
+                    <span className="text-xs font-semibold text-dreams-text/70">{formatearNumero(resumen.totalFichasFisicas)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-6">
+                    <span className="text-[10px] text-dreams-gold/50 uppercase tracking-wider">Valor total torneo</span>
+                    <span className="text-xs font-semibold text-dreams-text/70">{formatearNumero(resumen.valorTotalTorneo)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-6">
+                    <span className="text-[10px] text-dreams-gold/50 uppercase tracking-wider">Fichas por jugador</span>
+                    <span className="text-xs font-semibold text-dreams-text/70">{formatearNumero(resumen.fichasPorJugador)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between gap-6">
-                  <span className="text-[10px] text-dreams-gold/50 uppercase tracking-wider">Valor total torneo</span>
-                  <span className="text-xs font-semibold text-dreams-text/70">{formatearNumero(resumen.valorTotalTorneo)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-6">
-                  <span className="text-[10px] text-dreams-gold/50 uppercase tracking-wider">Fichas por jugador</span>
-                  <span className="text-xs font-semibold text-dreams-text/70">{formatearNumero(resumen.fichasPorJugador)}</span>
+                <div className="w-px self-stretch bg-dreams-gold/20" />
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-[10px] text-dreams-gold/60 uppercase tracking-widest mb-0.5">Stack Inicial</span>
+                  <span className="text-4xl font-black text-dreams-gold tabular-nums leading-none">
+                    {formatearNumero(resumen.stackInicial)}
+                  </span>
+                  <span className="text-[10px] text-dreams-gold/40 mt-1">puntos por jugador</span>
                 </div>
               </div>
-              <div className="w-px self-stretch bg-dreams-gold/20" />
-              <div className="flex flex-col items-center justify-center">
-                <span className="text-[10px] text-dreams-gold/60 uppercase tracking-widest mb-0.5">Stack Inicial</span>
-                <span className="text-4xl font-black text-dreams-gold tabular-nums leading-none">
-                  {formatearNumero(resumen.stackInicial)}
-                </span>
-                <span className="text-[10px] text-dreams-gold/40 mt-1">puntos por jugador</span>
+
+              {/* Botones */}
+              <div className="flex items-center gap-3 px-5 ml-auto">
+                <button type="button" onClick={onCerrar}
+                  className="px-6 py-3 rounded-xl border border-dreams-border text-sm font-semibold text-dreams-text-muted hover:text-dreams-text hover:border-dreams-gold/40 hover:bg-dreams-surface-2 active:scale-[0.98] transition-all duration-150">
+                  Cancelar
+                </button>
+
+                {pestana === 'stack' && (
+                  <button type="button" onClick={handleConfirmarStack} disabled={!stackDefinido}
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold tracking-wide bg-dreams-gold text-dreams-dark hover:bg-dreams-gold-light hover:shadow-lg hover:shadow-dreams-gold/20 active:scale-[0.98] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">
+                    Confirmar Stack Inicial
+                    <FiArrowRight size={15} />
+                  </button>
+                )}
+
+                {pestana === 'totales' && (
+                  <button type="button" onClick={handleGuardar}
+                    className="px-8 py-3 rounded-xl text-sm font-bold tracking-wide bg-dreams-gold text-dreams-dark hover:bg-dreams-gold-light hover:shadow-lg hover:shadow-dreams-gold/20 active:scale-[0.98] transition-all duration-150">
+                    Guardar Fichas
+                  </button>
+                )}
               </div>
-            </div>
-
-            {/* Botones */}
-            <div className="flex items-center gap-3 px-5 ml-auto">
-              <button type="button" onClick={onCerrar}
-                className="px-6 py-3 rounded-xl border border-dreams-border text-sm font-semibold text-dreams-text-muted hover:text-dreams-text hover:border-dreams-gold/40 hover:bg-dreams-surface-2 active:scale-[0.98] transition-all duration-150">
-                Cancelar
-              </button>
-
-              {/* Pestaña stack: botón Confirmar Stack Inicial → va a totales */}
-              {pestana === 'stack' && (
-                <button type="button" onClick={handleConfirmarStack} disabled={!stackDefinido}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold tracking-wide bg-dreams-gold text-dreams-dark hover:bg-dreams-gold-light hover:shadow-lg hover:shadow-dreams-gold/20 active:scale-[0.98] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">
-                  Confirmar Stack Inicial
-                  <FiArrowRight size={15} />
-                </button>
-              )}
-
-              {/* Pestaña totales: botón Guardar Fichas */}
-              {pestana === 'totales' && (
-                <button type="button" onClick={handleGuardar}
-                  className="px-8 py-3 rounded-xl text-sm font-bold tracking-wide bg-dreams-gold text-dreams-dark hover:bg-dreams-gold-light hover:shadow-lg hover:shadow-dreams-gold/20 active:scale-[0.98] transition-all duration-150">
-                  Guardar Fichas
-                </button>
-              )}
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {modalNombreAbierto && (
+        <ModalNombrePlantilla
+          onConfirmar={confirmarGuardarPlantilla}
+          onCancelar={() => setModalNombreAbierto(false)}
+        />
+      )}
+    </>
   );
 }

@@ -15,6 +15,8 @@ import catalogoRoutes from './modules/catalogo/catalogo.routes.js'
 import torneoRoutes from './modules/torneo/torneo.routes.js'
 import plantillaPremiosRoutes from './modules/torneo/plantilla_premios.routes.js'
 import plantillaCircuitoRoutes from './modules/torneo/plantilla_circuito.routes.js'
+import plantillaFichasRoutes from './modules/torneo/plantilla_fichas.routes.js'
+import plantillaCiegasRoutes from './modules/torneo/plantilla_ciegas.routes.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -65,6 +67,8 @@ app.use('/api/catalogo', catalogoRoutes)
 app.use('/api/torneos', torneoRoutes)
 app.use('/api/plantillas-premios', plantillaPremiosRoutes)
 app.use('/api/plantillas-circuito', plantillaCircuitoRoutes)
+app.use('/api/plantillas-fichas', plantillaFichasRoutes)
+app.use('/api/plantillas-ciegas', plantillaCiegasRoutes)
 
 // Ruta de salud del servidor
 app.get('/api/salud', (req, res) => {

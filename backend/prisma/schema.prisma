@@ -140,7 +140,58 @@ model CatalogoFicha {
   activo     Boolean  @default(true)
   created_at DateTime @default(now())
 
+  plantillaDetalles PlantillaFichaDetalle[]
+
   @@map("catalogo_ficha")
+}
+
+model PlantillaFicha {
+  id_plantilla Int      @id @default(autoincrement())
+  nombre       String   @db.VarChar(80)
+  created_at   DateTime @default(now())
+
+  detalles PlantillaFichaDetalle[]
+
+  @@map("plantilla_ficha")
+}
+
+model PlantillaFichaDetalle {
+  id_detalle          Int     @id @default(autoincrement())
+  id_plantilla        Int
+  id_ficha_catalogo   Int
+  valor               Int
+  cantidad_por_jugador Int
+
+  plantilla PlantillaFicha  @relation(fields: [id_plantilla], references: [id_plantilla], onDelete: Cascade)
+  ficha     CatalogoFicha   @relation(fields: [id_ficha_catalogo], references: [id_ficha])
+
+  @@map("plantilla_ficha_detalle")
+}
+
+model PlantillaCiega {
+  id_plantilla Int      @id @default(autoincrement())
+  nombre       String   @db.VarChar(80)
+  created_at   DateTime @default(now())
+
+  detalles PlantillaCiegaDetalle[]
+
+  @@map("plantilla_ciega")
+}
+
+model PlantillaCiegaDetalle {
+  id_detalle      Int       @id @default(autoincrement())
+  id_plantilla    Int
+  orden           Int
+  tipo            TipoNivel @default(NIVEL)
+  sb              Int       @default(0)
+  bb              Int       @default(0)
+  ante            Int       @default(0)
+  tiempo_segundos Int
+  marcadores      Json      @default("[]")
+
+  plantilla PlantillaCiega @relation(fields: [id_plantilla], references: [id_plantilla], onDelete: Cascade)
+
+  @@map("plantilla_ciega_detalle")
 }
 
 model EsquemaPremio {
