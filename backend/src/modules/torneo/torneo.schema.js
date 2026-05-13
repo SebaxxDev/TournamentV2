@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Schema de un nivel de ciegas o break
 const nivelSchema = z.object({
-  numero_nivel: z.number().int().positive(),
+  numero_nivel: z.number().int().min(0),
   tipo: z.enum(['NIVEL', 'BREAK', 'REGISTRO', 'COLOR_UP']),
   sb: z.number().int().min(0).default(0),
   bb: z.number().int().min(0).default(0),
@@ -27,6 +27,7 @@ export const crearTorneoSchema = z.object({
   fecha_inicio: z.string().datetime({ message: 'Fecha de inicio inválida' }),
   id_tipo_juego: z.number().int().positive(),
   buy_in_monto: z.number().int().positive('El buy-in debe ser mayor a 0'),
+  id_esquema_premio: z.number().int().positive().optional().nullable(),
   capacidad_maxima: z.number().int().positive().optional().nullable(),
   minimo_inicio: z.number().int().positive().optional().nullable(),
 

@@ -4,9 +4,9 @@ import {
   crearPlantillaFicha,
   eliminarPlantillaFicha,
 } from './plantilla_fichas.controller.js';
-import verificarToken from '../../middlewares/auth.middleware.js';
-import verificarRol from '../../middlewares/roles.middleware.js';
-import validar from '../../middlewares/validate.middleware.js';
+import verificarToken from '../../../../middlewares/auth.middleware.js';
+import verificarRol from '../../../../middlewares/roles.middleware.js';
+import validar from '../../../../middlewares/validate.middleware.js';
 import { crearPlantillaFichaSchema } from './plantilla_fichas.schema.js';
 
 const router = Router();

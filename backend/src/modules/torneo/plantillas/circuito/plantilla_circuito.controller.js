@@ -1,4 +1,4 @@
-import prisma from '../../config/db.js';
+import prisma from '../../../../config/db.js';
 
 export const obtenerPlantillaCircuito = async (req, res) => {
   const { id } = req.params;

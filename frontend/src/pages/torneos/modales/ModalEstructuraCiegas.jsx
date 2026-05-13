@@ -39,8 +39,8 @@ const MARCADORES_CONFIG = [
   { key: 'fin_registro',  label: 'Fin Registro',    color: 'bg-amber-500',  texto: 'text-amber-400',  borde: 'border-amber-500/50',  requiere: null },
 ];
 
-let contadorId = 1;
-const nuevoId = () => `nivel-${contadorId++}`;
+let _seq = 0;
+const nuevoId = () => `nivel-${Date.now()}-${_seq++}`;
 
 const crearNivel = () => ({
   id: nuevoId(), tipo: 'NIVEL', sb: '', bb: '', ante: '', duracion: '', marcadores: [],
@@ -511,24 +511,30 @@ export default function ModalEstructuraCiegas({ opciones, nivelesIniciales, onGu
   const minutos = duracionTotal % 60;
 
   const handleGuardar = () => {
-    const nivelesSerializados = niveles.map((n, i) => ({
-      numero_nivel: i + 1,
-      tipo: n.tipo,
-      sb: Number(n.sb) || 0,
-      bb: Number(n.bb) || 0,
-      ante: Number(n.ante) || 0,
-      tiempo_segundos: (Number(n.duracion) || 0) * 60,
-      marcadores: n.marcadores,
-    }));
+    // Los breaks llevan numero_nivel 0 — solo se numeran los niveles reales
+    let contadorRealNivel = 0;
+    const nivelesSerializados = niveles.map((n) => {
+      if (n.tipo !== 'BREAK') contadorRealNivel++;
+      return {
+        numero_nivel: n.tipo === 'BREAK' ? 0 : contadorRealNivel,
+        tipo: n.tipo,
+        sb: Number(n.sb) || 0,
+        bb: Number(n.bb) || 0,
+        ante: Number(n.ante) || 0,
+        tiempo_segundos: (Number(n.duracion) || 0) * 60,
+        marcadores: n.marcadores,
+      };
+    });
 
+    // Los extras usan el numero_nivel real (sin breaks)
     const extras = {};
     nivelesSerializados.forEach((n) => {
-      if (n.marcadores.includes('rebuy_inicio'))  extras.rebuy_nivel_inicio      = n.numero_nivel;
-      if (n.marcadores.includes('rebuy_fin'))     extras.rebuy_nivel_final       = n.numero_nivel;
-      if (n.marcadores.includes('addon_inicio'))  extras.addon_nivel_inicio      = n.numero_nivel;
-      if (n.marcadores.includes('addon_fin'))     extras.addon_nivel_final       = n.numero_nivel;
-      if (n.marcadores.includes('freechip_fin'))  extras.free_chip_nivel_final   = n.numero_nivel;
-      if (n.marcadores.includes('fin_registro'))  extras.ultimo_nivel_registro   = n.numero_nivel;
+      if (n.marcadores.includes('rebuy_inicio'))  extras.rebuy_nivel_inicio    = n.numero_nivel;
+      if (n.marcadores.includes('rebuy_fin'))     extras.rebuy_nivel_final     = n.numero_nivel;
+      if (n.marcadores.includes('addon_inicio'))  extras.addon_nivel_inicio    = n.numero_nivel;
+      if (n.marcadores.includes('addon_fin'))     extras.addon_nivel_final     = n.numero_nivel;
+      if (n.marcadores.includes('freechip_fin'))  extras.free_chip_nivel_final = n.numero_nivel;
+      if (n.marcadores.includes('fin_registro'))  extras.ultimo_nivel_registro = n.numero_nivel;
     });
 
     onGuardar({ niveles: nivelesSerializados, ...extras });

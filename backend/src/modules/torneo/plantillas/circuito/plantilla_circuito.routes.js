@@ -5,9 +5,9 @@ import {
   crearPlantillaCircuito,
   eliminarPlantillaCircuito,
 } from './plantilla_circuito.controller.js';
-import verificarToken from '../../middlewares/auth.middleware.js';
-import verificarRol from '../../middlewares/roles.middleware.js';
-import validar from '../../middlewares/validate.middleware.js';
+import verificarToken from '../../../../middlewares/auth.middleware.js';
+import verificarRol from '../../../../middlewares/roles.middleware.js';
+import validar from '../../../../middlewares/validate.middleware.js';
 import { crearPlantillaCircuitoSchema } from './plantilla_circuito.schema.js';
 
 const router = Router();

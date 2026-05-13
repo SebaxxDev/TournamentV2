@@ -212,6 +212,9 @@ export default function CrearTorneo() {
     onSuccess: (torneo) => {
       navigate(`/torneos/${torneo.id_torneo}`);
     },
+    onError: (err) => {
+      console.error('[CrearTorneo] Error:', err.response?.data);
+    },
   });
 
   const toggleOpcion = (key) => setOpciones((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -234,9 +237,10 @@ export default function CrearTorneo() {
   );
 
   const rakeCompleto = (
-    !!watch('rake_pct_inscripcion') &&
-    (!opciones.rebuy_permitido || !!watch('rake_pct_rebuy')) &&
-    (!opciones.addon_permitido  || !!watch('rake_pct_addon'))
+    watch('rake_pct_inscripcion') !== '' &&
+    watch('rake_pct_inscripcion') !== undefined &&
+    (!opciones.rebuy_permitido || (watch('rake_pct_rebuy') !== '' && watch('rake_pct_rebuy') !== undefined)) &&
+    (!opciones.addon_permitido  || (watch('rake_pct_addon') !== '' && watch('rake_pct_addon') !== undefined))
   );
 
   const formularioCompleto = formularioBaseCompleto && variablesCompletas && rakeCompleto;
@@ -276,12 +280,13 @@ export default function CrearTorneo() {
       timebank_n_tarjetas: opciones.timebank_permitido ? Number(valores.timebank_n_tarjetas) || 0 : 0,
       timebank_tiempo: opciones.timebank_permitido ? Number(valores.timebank_tiempo) || 0 : 0,
       stack_inicial_valor: datosModales.fichas.reduce((acc, f) => acc + f.valor * f.cantidad_por_jugador, 0),
+      id_esquema_premio: datosModales.premios?.id_esquema ?? null,
       id_plantilla_circuito: opciones.puntos_circuito ? datosModales.circuito ?? null : null,
       niveles: datosModales.niveles,
       fichas: datosModales.fichas,
-      premios: datosModales.premios,
       ...extrasNiveles,
     };
+    console.log('[CrearTorneo] payload:', JSON.stringify(payload, null, 2));
     mutacionCrear.mutate(payload);
   };
 
@@ -633,8 +638,15 @@ export default function CrearTorneo() {
       {modalPremiosAbierto && (
         <ModalTablaPremios
           premiosIniciales={datosModales.premios}
-          onGuardar={(datos) => {
-            setDatosModales((prev) => ({ ...prev, premios: datos }));
+          onGuardar={(idEsquema) => {
+            setDatosModales((prev) => ({
+              ...prev,
+              // Guardamos el id_esquema y los datos visuales para restaurar la tabla si reabre
+              premios: {
+                ...(prev.premios ?? {}),
+                id_esquema: idEsquema,
+              },
+            }));
             setModalesCompletados((prev) => ({ ...prev, premios: true }));
             setModalPremiosAbierto(false);
           }}

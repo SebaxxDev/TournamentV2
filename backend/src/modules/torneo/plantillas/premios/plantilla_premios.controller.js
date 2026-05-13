@@ -1,4 +1,4 @@
-import prisma from '../../config/db.js';
+import prisma from '../../../../config/db.js';
 
 // Retorna todas las plantillas con sus reglas ordenadas
 export const listarPlantillas = async (req, res) => {

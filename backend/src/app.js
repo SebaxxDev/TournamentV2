@@ -13,10 +13,11 @@ import jugadorRoutes from './modules/jugador/jugador.routes.js'
 import fichaRoutes from './modules/fichas/ficha.routes.js'
 import catalogoRoutes from './modules/catalogo/catalogo.routes.js'
 import torneoRoutes from './modules/torneo/torneo.routes.js'
-import plantillaPremiosRoutes from './modules/torneo/plantilla_premios.routes.js'
-import plantillaCircuitoRoutes from './modules/torneo/plantilla_circuito.routes.js'
-import plantillaFichasRoutes from './modules/torneo/plantilla_fichas.routes.js'
-import plantillaCiegasRoutes from './modules/torneo/plantilla_ciegas.routes.js'
+import plantillaPremiosRoutes from './modules/torneo/plantillas/premios/plantilla_premios.routes.js'
+import plantillaCircuitoRoutes from './modules/torneo/plantillas/circuito/plantilla_circuito.routes.js'
+import plantillaFichasRoutes from './modules/torneo/plantillas/fichas/plantilla_fichas.routes.js'
+import plantillaCiegasRoutes from './modules/torneo/plantillas/ciegas/plantilla_ciegas.routes.js'
+import { inicializarSocket } from './socket/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -87,6 +88,9 @@ app.use((err, req, res, next) => {
 })
 
 const PUERTO = process.env.PORT || 3000
+
+// Inicializar Socket.io sobre el servidor HTTP
+inicializarSocket(servidor)
 
 servidor.listen(PUERTO, () => {
   console.log(`Servidor corriendo en puerto ${PUERTO}`)

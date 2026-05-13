@@ -8,8 +8,8 @@ import api from '../../../services/api.js';
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
-let contadorId = 100;
-const nuevoId = (prefijo) => `${prefijo}-${contadorId++}`;
+let _seq = 0;
+const nuevoId = (prefijo) => `${prefijo}-${Date.now()}-${_seq++}`;
 
 const plantillaAEstado = (plantilla) => {
   const { reglas } = plantilla;
@@ -140,11 +140,18 @@ const ModalNombrePlantilla = ({ onConfirmar, onCancelar }) => {
 
 // ------------------------------------------------------------
 // Componente principal
+// premiosIniciales puede ser:
+//   null                          → tabla nueva sin datos
+//   { id_esquema, columnas, filas } → reabriendo el modal con datos ya guardados
+// onGuardar recibe: (id_esquema: number) — el ID del EsquemaPremio en la DB
 // ------------------------------------------------------------
 export default function ModalTablaPremios({ premiosIniciales, onGuardar, onCerrar }) {
   const queryClient = useQueryClient();
   const [{ columnas, filas }, setEstado] = useState(() => construirEstadoInicial(premiosIniciales));
-  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(null);
+  // Si venimos de un guardado previo, pre-seleccionar la plantilla
+  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState(
+    premiosIniciales?.id_esquema ?? null
+  );
   const [dropdownAbierto, setDropdownAbierto] = useState(false);
   const [modalNombreAbierto, setModalNombreAbierto] = useState(false);
   // Para manejar el hover de la fila y que el sticky cambie de color correctamente
@@ -162,7 +169,10 @@ export default function ModalTablaPremios({ premiosIniciales, onGuardar, onCerra
     mutationFn: ({ nombre, reglas }) => api.post('/plantillas-premios', { nombre, reglas }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['plantillas-premios'] });
-      setPlantillaSeleccionada(res.data.datos.id_esquema);
+      const idEsquema = res.data.datos.id_esquema;
+      setPlantillaSeleccionada(idEsquema);
+      setModalNombreAbierto(false);
+      onGuardar(idEsquema);
     },
   });
 
@@ -213,7 +223,7 @@ export default function ModalTablaPremios({ premiosIniciales, onGuardar, onCerra
 
   const confirmarGuardarPlantilla = (nombre) => {
     mutacionCrearPlantilla.mutate({ nombre, reglas: estadoAReglas(columnas, filas) });
-    setModalNombreAbierto(false);
+    // onGuardar se llama en onSuccess de mutacionCrearPlantilla
   };
 
   // ----------------------------------------------------------
@@ -299,9 +309,16 @@ export default function ModalTablaPremios({ premiosIniciales, onGuardar, onCerra
       columnas: prev.columnas.map((c) => (c.id === colId ? { ...c, label: valor } : c)),
     }));
 
+  // Guardar tabla para el torneo:
+  // - Si hay una plantilla seleccionada y cargada → reutilizar ese ID sin crear otra
+  // - Si no hay plantilla → pedir nombre y crear una nueva en la DB
   const handleGuardar = () => {
     if (!puedeGuardar) return;
-    onGuardar({ columnas, filas });
+    if (plantillaSeleccionada) {
+      onGuardar(plantillaSeleccionada);
+    } else {
+      setModalNombreAbierto(true);
+    }
   };
 
   const plantillaActual = plantillas.find((p) => p.id_esquema === plantillaSeleccionada);
@@ -655,15 +672,30 @@ export default function ModalTablaPremios({ premiosIniciales, onGuardar, onCerra
                   No suman 100%: <span className="font-semibold ml-1">{columnasConError.map((c) => c.label).join(', ')}</span>
                 </p>
               )}
+              {mutacionCrearPlantilla.isError && (
+                <p className="text-[11px] text-red-400 flex items-center gap-1.5">
+                  <FiAlertCircle size={11} />
+                  {mutacionCrearPlantilla.error?.response?.data?.mensaje ?? 'Error al guardar la tabla.'}
+                </p>
+              )}
+              {!plantillaSeleccionada && puedeGuardar && (
+                <p className="text-[10px] text-dreams-text-muted/60 italic">
+                  Se te pedirá un nombre para guardar esta tabla en la base de datos.
+                </p>
+              )}
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={onCerrar}
                 className="px-5 py-2.5 rounded-xl border border-dreams-border text-sm text-dreams-text-muted hover:text-dreams-text hover:border-dreams-gold/40 transition-all">
                 Cancelar
               </button>
-              <button type="button" onClick={handleGuardar} disabled={!puedeGuardar}
-                className="px-6 py-2.5 rounded-xl bg-dreams-gold text-dreams-dark text-sm font-bold hover:bg-dreams-gold-light active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                Guardar Tabla
+              <button
+                type="button"
+                onClick={handleGuardar}
+                disabled={!puedeGuardar || mutacionCrearPlantilla.isPending}
+                className="px-6 py-2.5 rounded-xl bg-dreams-gold text-dreams-dark text-sm font-bold hover:bg-dreams-gold-light active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {mutacionCrearPlantilla.isPending ? 'Guardando...' : 'Guardar Tabla'}
               </button>
             </div>
           </div>

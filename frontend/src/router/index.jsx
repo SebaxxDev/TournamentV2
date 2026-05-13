@@ -7,6 +7,7 @@ import Staff from '../pages/staff/Staff'
 import Jugadores from '../pages/jugadores/Jugadores'
 import Fichas from '../pages/fichas/Fichas'
 import CrearTorneo from '../pages/torneos/CrearTorneo'
+import ControlTorneo from '../pages/torneos/ControlTorneo'
 
 
 const ROLES_PANEL = ['ADMIN', 'DIRECTOR', 'SUPERVISOR']
@@ -32,7 +33,6 @@ const Router = () => {
             }
           />
           {/* <Route path="/torneos" element={<Torneos />} /> */}
-          {/* <Route path="/torneos/:id/control" element={<ControlTorneo />} /> */}
 
           <Route path="/jugadores" element={<Jugadores />} />
           <Route path="/fichas" element={<Fichas />} />
@@ -40,6 +40,16 @@ const Router = () => {
           {/* <Route path="/auditoria" element={<Auditoria />} /> */}
         </Route>
       </Route>
+
+      {/* Control de torneo: layout propio, sin MainLayout */}
+      <Route
+        path="/torneos/:id"
+        element={
+          <RutaProtegida rolesPermitidos={['ADMIN', 'DIRECTOR', 'SUPERVISOR']}>
+            <ControlTorneo />
+          </RutaProtegida>
+        }
+      />
 
       {/* Rutas sin layout (pantallas independientes) */}
       {/* <Route element={<RutaProtegida rolesPermitidos={['ADMIN', 'DIRECTOR', 'SUPERVISOR', 'CAJERO']} />}> */}

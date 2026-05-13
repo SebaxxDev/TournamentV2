@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { crearTorneo, listarTorneos, obtenerTorneo, publicarTorneo } from './torneo.controller.js';
+import { crearTorneo, listarTorneos, obtenerTorneo, obtenerEstadoControl, publicarTorneo, obtenerEstadisticasDashboard } from './torneo.controller.js';
 import verificarToken from '../../middlewares/auth.middleware.js';
 import verificarRol from '../../middlewares/roles.middleware.js';
 import validar from '../../middlewares/validate.middleware.js';
@@ -27,6 +27,20 @@ router.post(
   verificarRol('ADMIN', 'DIRECTOR'),
   validar(crearTorneoSchema),
   crearTorneo
+);
+
+router.get(
+  '/dashboard/estadisticas',
+  verificarToken,
+  verificarRol('ADMIN', 'DIRECTOR', 'SUPERVISOR'),
+  obtenerEstadisticasDashboard
+);
+
+router.get(
+  '/:id/control',
+  verificarToken,
+  verificarRol('ADMIN', 'DIRECTOR', 'SUPERVISOR'),
+  obtenerEstadoControl
 );
 
 router.patch(

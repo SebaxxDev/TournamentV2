@@ -8,8 +8,8 @@ import api from '../../../services/api.js';
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
-let contadorId = 100;
-const nuevoId = (prefijo) => `${prefijo}-${contadorId++}`;
+let _seq = 0;
+const nuevoId = (prefijo) => `${prefijo}-${Date.now()}-${_seq++}`;
 
 const redondear2 = (n) => Math.round(Number(n) * 100) / 100;
 
@@ -96,6 +96,8 @@ export default function ModalTablaPuntosCircuito({
   const [modalNombreModo, setModalNombreModo] = useState('torneo');
   const [filaHover, setFilaHover] = useState(null);
   const [listoParaMostrar, setListoParaMostrar] = useState(!idPlantillaInicial);
+  // Detecta si el usuario modificó la plantilla cargada para decidir si crear una nueva o reutilizar
+  const [plantillaModificada, setPlantillaModificada] = useState(false);
 
   const { data: plantillaCargada, isLoading: cargandoPlantilla } = useQuery({
     queryKey: ['plantilla-circuito', idPlantillaInicial],
@@ -122,6 +124,7 @@ export default function ModalTablaPuntosCircuito({
         }))
       );
       setPlantillaSeleccionada(plantillaCargada.id_plantilla);
+      setPlantillaModificada(false);
       setListoParaMostrar(true);
     }
   }, [idPlantillaInicial, plantillaCargada]);
@@ -200,6 +203,7 @@ export default function ModalTablaPuntosCircuito({
       }))
     );
     setPlantillaSeleccionada(plantilla.id_plantilla);
+    setPlantillaModificada(false);
     setDropdownAbierto(false);
   };
 
@@ -230,6 +234,12 @@ export default function ModalTablaPuntosCircuito({
 
   const handleGuardarTabla = () => {
     if (!puedeGuardar) return;
+    // Si hay plantilla seleccionada y no fue modificada → reutilizar sin crear otra
+    if (plantillaSeleccionada && !plantillaModificada) {
+      onGuardar(plantillaSeleccionada);
+      return;
+    }
+    // Si es nueva o fue modificada → pedir nombre y crear en la DB
     setModalNombreModo('torneo');
     setModalNombreAbierto(true);
   };
@@ -247,13 +257,15 @@ export default function ModalTablaPuntosCircuito({
     setFilas((prev) =>
       prev.map((f) => (f.id === filaId ? { ...f, [campo]: valor } : f))
     );
+    if (plantillaSeleccionada) setPlantillaModificada(true);
   };
 
   const topeFilas = capacidadMaxInscripciones != null
     ? Math.min(Math.floor(capacidadMaxInscripciones), LIMITE_FILAS_TABLA)
     : LIMITE_FILAS_TABLA;
 
-  const agregarFila = () =>
+  const agregarFila = () => {
+    if (plantillaSeleccionada) setPlantillaModificada(true);
     setFilas((prev) => {
       if (capacidadMaxInscripciones != null && prev.length >= topeFilas) return prev;
       const p = prev.length + 1;
@@ -267,18 +279,23 @@ export default function ModalTablaPuntosCircuito({
         },
       ];
     });
+  };
 
-  const eliminarUltimaFila = () =>
+  const eliminarUltimaFila = () => {
+    if (plantillaSeleccionada) setPlantillaModificada(true);
     setFilas((prev) => {
       if (prev.length === 0) return prev;
       if (prev.length === 1) return [];
       return prev.slice(0, -1).map((f, i) => ({ ...f, posicion: i + 1 }));
     });
+  };
 
-  const eliminarFila = (filaId) =>
+  const eliminarFila = (filaId) => {
+    if (plantillaSeleccionada) setPlantillaModificada(true);
     setFilas((prev) =>
       prev.filter((f) => f.id !== filaId).map((f, i) => ({ ...f, posicion: i + 1 }))
     );
+  };
 
   const mostrarCargando = idPlantillaInicial && (cargandoPlantilla || !listoParaMostrar);
   const tablaTruncada =
@@ -441,7 +458,10 @@ export default function ModalTablaPuntosCircuito({
                 value={puntosParticipacion}
                 onChange={(e) => {
                   const v = e.target.value.replace(',', '.');
-                  if (v === '' || /^\d{0,6}\.?\d{0,2}$/.test(v)) setPuntosParticipacion(v);
+                  if (v === '' || /^\d{0,6}\.?\d{0,2}$/.test(v)) {
+                    setPuntosParticipacion(v);
+                    if (plantillaSeleccionada) setPlantillaModificada(true);
+                  }
                 }}
                 className="bg-dreams-surface-2 border border-dreams-border rounded-lg px-3 py-2 text-sm text-dreams-text outline-none focus:border-dreams-gold/60 tabular-nums"
               />
