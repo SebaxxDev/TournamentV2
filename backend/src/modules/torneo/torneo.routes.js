@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { crearTorneo, listarTorneos, obtenerTorneo, obtenerEstadoControl, publicarTorneo, obtenerEstadisticasDashboard } from './torneo.controller.js';
+import { crearTorneo, listarTorneos, obtenerTorneo, obtenerEstadoControl, publicarTorneo, obtenerEstadisticasDashboard, eliminarTorneo, agregarNivel, editarNivel, eliminarNivel } from './torneo.controller.js';
 import verificarToken from '../../middlewares/auth.middleware.js';
 import verificarRol from '../../middlewares/roles.middleware.js';
 import validar from '../../middlewares/validate.middleware.js';
@@ -48,6 +48,35 @@ router.patch(
   verificarToken,
   verificarRol('ADMIN', 'DIRECTOR'),
   publicarTorneo
+);
+
+router.delete(
+  '/:id',
+  verificarToken,
+  verificarRol('ADMIN'),
+  eliminarTorneo
+);
+
+// ─── CRUD de niveles de un torneo ─────────────────────────────────────────────
+router.post(
+  '/:id/niveles',
+  verificarToken,
+  verificarRol('ADMIN', 'DIRECTOR'),
+  agregarNivel
+);
+
+router.patch(
+  '/:id/niveles/:idNivel',
+  verificarToken,
+  verificarRol('ADMIN', 'DIRECTOR'),
+  editarNivel
+);
+
+router.delete(
+  '/:id/niveles/:idNivel',
+  verificarToken,
+  verificarRol('ADMIN', 'DIRECTOR'),
+  eliminarNivel
 );
 
 export default router;

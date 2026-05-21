@@ -9,8 +9,15 @@ const SeccionPremios = ({ torneo, jugadores }) => {
 
   if (!esquema) {
     return (
-      <div>
-        <h2 className="text-white text-base font-semibold mb-4">Tabla de premios</h2>
+      <div className="flex flex-col flex-1 min-h-0 gap-0">
+        <div className="flex items-center gap-4 pb-3 mb-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
+          <h2
+            className="text-[1.1rem] font-black uppercase tracking-[4px] shrink-0"
+            style={{ color: '#D4AF37', textShadow: '0 0 20px rgba(212,175,55,0.35)' }}
+          >
+            Tabla de premios
+          </h2>
+        </div>
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
           <FiAward size={36} className="text-dreams-border" />
           <p className="text-dreams-text-muted text-sm">
@@ -24,9 +31,16 @@ const SeccionPremios = ({ torneo, jugadores }) => {
   const reglas = esquema.reglas ?? []
 
   return (
-    <div>
-      <h2 className="text-white text-base font-semibold mb-1">Tabla de premios</h2>
-      <p className="text-dreams-text-muted text-xs mb-4">{esquema.nombre}</p>
+    <div className="flex flex-col flex-1 min-h-0 gap-0">
+      <div className="flex items-center gap-4 pb-3 mb-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
+        <h2
+          className="text-[1.1rem] font-black uppercase tracking-[4px] shrink-0"
+          style={{ color: '#D4AF37', textShadow: '0 0 20px rgba(212,175,55,0.35)' }}
+        >
+          Tabla de premios
+        </h2>
+        <span className="text-[0.7rem] text-[#555] uppercase tracking-[1px]">{esquema.nombre}</span>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

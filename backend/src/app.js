@@ -17,6 +17,8 @@ import plantillaPremiosRoutes from './modules/torneo/plantillas/premios/plantill
 import plantillaCircuitoRoutes from './modules/torneo/plantillas/circuito/plantilla_circuito.routes.js'
 import plantillaFichasRoutes from './modules/torneo/plantillas/fichas/plantilla_fichas.routes.js'
 import plantillaCiegasRoutes from './modules/torneo/plantillas/ciegas/plantilla_ciegas.routes.js'
+import inscripcionRoutes from './modules/inscripcion/inscripcion.routes.js'
+import mesaRoutes from './modules/mesa/mesa.routes.js'
 import { inicializarSocket } from './socket/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -70,6 +72,8 @@ app.use('/api/plantillas-premios', plantillaPremiosRoutes)
 app.use('/api/plantillas-circuito', plantillaCircuitoRoutes)
 app.use('/api/plantillas-fichas', plantillaFichasRoutes)
 app.use('/api/plantillas-ciegas', plantillaCiegasRoutes)
+app.use('/api/inscripciones', inscripcionRoutes)
+app.use('/api/mesas', mesaRoutes)
 
 // Ruta de salud del servidor
 app.get('/api/salud', (req, res) => {

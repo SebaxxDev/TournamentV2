@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiTrash2, FiAward, FiUsers, FiDollarSign, FiCalendar, FiLoader } from 'react-icons/fi'
 import api from '../../services/api'
 
@@ -32,6 +32,7 @@ const BadgeEstado = ({ estado }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-estadisticas'],
@@ -42,11 +43,22 @@ export default function Dashboard() {
   const proximos = data?.proximos ?? []
   const finalizados = data?.finalizados ?? []
   const resumen = data?.resumen ?? {}
+  const promedioBuyIn = resumen.promedioBuyInMes ?? 0
 
-  const handleEliminar = (e, idTorneo) => {
+  const handleEliminar = async (e, idTorneo, estado) => {
     e.stopPropagation()
-    if (window.confirm('Confirmas eliminar este torneo?')) {
-      console.log('Eliminar torneo', idTorneo)
+    const enCurso = ['EN_JUEGO', 'PAUSADO'].includes(estado)
+    const confirmMsg = enCurso
+      ? 'Este torneo esta en curso.\n\n¿Seguro que quieres eliminarlo? Esta accion no se puede deshacer.'
+      : '¿Confirmas eliminar este torneo?'
+    if (!window.confirm(confirmMsg)) return
+    if (enCurso && !window.confirm('Confirmacion final: se eliminaran todos los datos del torneo. ¿Continuar?')) return
+    try {
+      await api.delete(`/torneos/${idTorneo}`)
+      queryClient.invalidateQueries({ queryKey: ['dashboard-estadisticas'] })
+    } catch (err) {
+      const mensaje = err.response?.data?.mensaje ?? 'No se pudo eliminar el torneo'
+      alert(mensaje)
     }
   }
 
@@ -97,10 +109,10 @@ export default function Dashboard() {
               <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded bg-dreams-surface-2 text-dreams-text-muted border border-dreams-border">Este mes</span>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-[1.5px] text-dreams-text-muted font-medium mb-1">Recaudacion</p>
-              <p className="text-3xl font-bold text-dreams-gold">{isLoading ? '—' : formatearMonto(resumen.recaudacionMes ?? 0)}</p>
+              <p className="text-[11px] uppercase tracking-[1.5px] text-dreams-text-muted font-medium mb-1">Promedio Buy-in</p>
+              <p className="text-3xl font-bold text-dreams-gold">{isLoading ? '—' : formatearMonto(promedioBuyIn)}</p>
               <p className="text-xs text-dreams-text-muted mt-1.5 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-dreams-gold inline-block" />en buy-ins este mes
+                <span className="w-1.5 h-1.5 rounded-full bg-dreams-gold inline-block" />promedio por torneo este mes
               </p>
             </div>
           </div>
@@ -117,15 +129,26 @@ export default function Dashboard() {
               {resumen.proximoTorneo ? (
                 <>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-bold text-dreams-text">{resumen.proximoTorneo.dias}</p>
-                    <span className="text-sm text-dreams-text-muted">{resumen.proximoTorneo.dias === 1 ? 'dia' : 'dias'}</span>
+                    {resumen.proximoTorneo.dias === 0 ? (
+                      <p className="text-3xl font-bold text-dreams-gold">Hoy</p>
+                    ) : (
+                      <>
+                        <p className="text-3xl font-bold text-dreams-text">{resumen.proximoTorneo.dias}</p>
+                        <span className="text-sm text-dreams-text-muted">{resumen.proximoTorneo.dias === 1 ? 'dia' : 'dias'}</span>
+                      </>
+                    )}
                   </div>
                   <p className="text-xs text-dreams-text-muted mt-1.5 flex items-center gap-1.5 truncate">
                     <span className="w-1.5 h-1.5 rounded-full bg-dreams-gold inline-block shrink-0" />{resumen.proximoTorneo.nombre}
                   </p>
                 </>
               ) : (
-                <p className="text-3xl font-bold text-dreams-text-muted">—</p>
+                <>
+                  <p className="text-3xl font-bold text-dreams-text-muted">—</p>
+                  <p className="text-xs text-dreams-text-muted mt-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-dreams-border inline-block" />sin torneos proximos
+                  </p>
+                </>
               )}
             </div>
           </div>
@@ -166,7 +189,7 @@ export default function Dashboard() {
                   <td className="px-4 py-3 text-dreams-text-muted">{torneo._count?.inscripciones ?? 0}</td>
                   <td className="px-4 py-3"><BadgeEstado estado={torneo.estado} /></td>
                   <td className="px-4 py-3 text-center">
-                    <button onClick={(e) => handleEliminar(e, torneo.id_torneo)}
+                    <button onClick={(e) => handleEliminar(e, torneo.id_torneo, torneo.estado)}
                       className="text-dreams-text-muted hover:text-red-400 transition-colors p-1 rounded" title="Eliminar">
                       <FiTrash2 size={14} />
                     </button>

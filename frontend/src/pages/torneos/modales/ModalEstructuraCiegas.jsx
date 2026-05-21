@@ -526,15 +526,27 @@ export default function ModalEstructuraCiegas({ opciones, nivelesIniciales, onGu
       };
     });
 
-    // Los extras usan el numero_nivel real (sin breaks)
+    // Resuelve el numero_nivel real para un marcador: si el nivel es un break (numero_nivel = 0),
+    // busca el nivel real más próximo hacia atrás o hacia adelante en el array.
+    const resolverNivel = (idx) => {
+      if (nivelesSerializados[idx].numero_nivel > 0) return nivelesSerializados[idx].numero_nivel;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (nivelesSerializados[i].numero_nivel > 0) return nivelesSerializados[i].numero_nivel;
+      }
+      for (let i = idx + 1; i < nivelesSerializados.length; i++) {
+        if (nivelesSerializados[i].numero_nivel > 0) return nivelesSerializados[i].numero_nivel;
+      }
+      return 0;
+    };
+
     const extras = {};
-    nivelesSerializados.forEach((n) => {
-      if (n.marcadores.includes('rebuy_inicio'))  extras.rebuy_nivel_inicio    = n.numero_nivel;
-      if (n.marcadores.includes('rebuy_fin'))     extras.rebuy_nivel_final     = n.numero_nivel;
-      if (n.marcadores.includes('addon_inicio'))  extras.addon_nivel_inicio    = n.numero_nivel;
-      if (n.marcadores.includes('addon_fin'))     extras.addon_nivel_final     = n.numero_nivel;
-      if (n.marcadores.includes('freechip_fin'))  extras.free_chip_nivel_final = n.numero_nivel;
-      if (n.marcadores.includes('fin_registro'))  extras.ultimo_nivel_registro = n.numero_nivel;
+    nivelesSerializados.forEach((n, idx) => {
+      if (n.marcadores.includes('rebuy_inicio'))  extras.rebuy_nivel_inicio    = resolverNivel(idx);
+      if (n.marcadores.includes('rebuy_fin'))     extras.rebuy_nivel_final     = resolverNivel(idx);
+      if (n.marcadores.includes('addon_inicio'))  extras.addon_nivel_inicio    = resolverNivel(idx);
+      if (n.marcadores.includes('addon_fin'))     extras.addon_nivel_final     = resolverNivel(idx);
+      if (n.marcadores.includes('freechip_fin'))  extras.free_chip_nivel_final = resolverNivel(idx);
+      if (n.marcadores.includes('fin_registro'))  extras.ultimo_nivel_registro = resolverNivel(idx);
     });
 
     onGuardar({ niveles: nivelesSerializados, ...extras });

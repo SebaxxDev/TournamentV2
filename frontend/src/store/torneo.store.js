@@ -18,6 +18,7 @@ const useTorneoStore = create((set, get) => ({
     pozoTotal: 0,
     contadorRebuy: 0,
     contadorAddon: 0,
+    segundosTorneo: 0,
   }),
 
   // ─── Estado general del torneo ────────────────────────────────────────────
@@ -32,23 +33,26 @@ const useTorneoStore = create((set, get) => ({
     total: 0,           // duracion total del nivel actual en segundos
   },
 
-  // Tick recibido del backend cada 1s
+  // Tick recibido del backend cada 1s — aqui se incrementa el tiempo del torneo
   aplicarTick: ({ segundosRestantes, nivelIndex, total }) => {
     set((s) => ({
       reloj: { ...s.reloj, activo: true, segundosRestantes, nivelIndex, total },
+      segundosTorneo: s.segundosTorneo + 1,
     }))
   },
 
   // Reloj iniciado (estado inicial al arrancar)
-  aplicarRelojIniciado: ({ nivelIndex, segundosRestantes, nivel, total }, niveles) => {
+  aplicarRelojIniciado: ({ nivelIndex, segundosRestantes, nivel, total, segundosTorneo }, niveles) => {
     set((s) => ({
       reloj: { activo: true, nivelIndex, segundosRestantes, total },
       nivelActual: nivel,
       siguienteNivel: niveles?.[nivelIndex + 1] ?? null,
+      // Solo sobreescribir si viene un valor explicito del backend
+      segundosTorneo: segundosTorneo ?? s.segundosTorneo,
     }))
   },
 
-  // Cambio de nivel (automático o manual)
+  // Cambio de nivel (automatico o manual) — no toca segundosTorneo
   aplicarCambioNivel: ({ nivelIndex, nivel, segundosRestantes }, niveles) => {
     set((s) => ({
       reloj: { ...s.reloj, nivelIndex, segundosRestantes, total: nivel?.tiempo_segundos ?? 0 },
@@ -57,12 +61,16 @@ const useTorneoStore = create((set, get) => ({
     }))
   },
 
-  // Reloj pausado
+  // Reloj pausado — no toca segundosTorneo
   aplicarRelojPausado: ({ segundosRestantes, nivelIndex }) => {
     set((s) => ({
       reloj: { ...s.reloj, activo: false, segundosRestantes, nivelIndex },
     }))
   },
+
+  // ─── Tiempo total del torneo (contador independiente, solo sube con tick) ──
+  segundosTorneo: 0,
+  setSegundosTorneo: (s) => set({ segundosTorneo: s }),
 
   // ─── Nivel actual y siguiente ─────────────────────────────────────────────
   nivelActual: null,
@@ -76,6 +84,9 @@ const useTorneoStore = create((set, get) => ({
   actualizarJugador: (rut, cambios) => set((s) => ({
     jugadores: s.jugadores.map((j) => j.jugador?.rut === rut ? { ...j, ...cambios } : j),
   })),
+  quitarJugador: (id_inscripcion) => set((s) => ({
+    jugadores: s.jugadores.filter((j) => j.id_inscripcion !== id_inscripcion),
+  })),
 
   // ─── Pozo y contadores ────────────────────────────────────────────────────
   pozoTotal: 0,
@@ -88,7 +99,7 @@ const useTorneoStore = create((set, get) => ({
   setContadores: ({ pozoTotal, contadorRebuy, contadorAddon }) =>
     set({ pozoTotal, contadorRebuy, contadorAddon }),
 
-  // ─── Sección activa del sidebar ───────────────────────────────────────────
+  // ─── Seccion activa del sidebar ───────────────────────────────────────────
   seccionActiva: 'jugadores',
   setSeccionActiva: (seccion) => set({ seccionActiva: seccion }),
 }))

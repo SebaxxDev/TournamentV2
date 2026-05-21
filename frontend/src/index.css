@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Control Torneo — alturas fijas de bandas superiores */
+.ct-banda-relojes {
+  height: 180px !important;
+  min-height: 180px !important;
+  flex-shrink: 0 !important;
+}
+.ct-banda-stats {
+  height: 120px !important;
+  min-height: 120px !important;
+  flex-shrink: 0 !important;
+}
+
 body {
   background-color: #0f0f0f;
   color: #cccccc;

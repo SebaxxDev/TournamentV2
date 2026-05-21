@@ -18,8 +18,15 @@ const SeccionStaff = ({ torneo }) => {
     : '—'
 
   return (
-    <div>
-      <h2 className="text-white text-base font-semibold mb-4">Información del torneo</h2>
+    <div className="flex flex-col flex-1 min-h-0 gap-0">
+      <div className="flex items-center gap-4 pb-3 mb-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
+        <h2
+          className="text-[1.1rem] font-black uppercase tracking-[4px] shrink-0"
+          style={{ color: '#D4AF37', textShadow: '0 0 20px rgba(212,175,55,0.35)' }}
+        >
+          Información del torneo
+        </h2>
+      </div>
 
       <div className="grid gap-3 max-w-lg">
         {/* Estado */}

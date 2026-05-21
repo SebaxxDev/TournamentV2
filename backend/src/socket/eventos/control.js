@@ -46,21 +46,38 @@ export const registrarEventosControl = (socket, io) => {
   });
 
   // Obtener estado actual del reloj (para reconexión o carga inicial)
-  socket.on('reloj:estado', ({ idTorneo }) => {
+  socket.on('reloj:estado', async ({ idTorneo }) => {
     const id = Number(idTorneo);
     const estado = obtenerEstadoReloj(id);
 
     if (!estado) {
-      socket.emit('reloj:estado_respuesta', { activo: false });
+      // Reloj no está en memoria (backend reiniciado o torneo pausado).
+      // Leemos reloj_segundos_torneo directamente desde la DB — ese campo se persiste en cada ciclo.
+      try {
+        const torneo = await prisma.torneo.findUnique({
+          where: { id_torneo: id },
+          select: { reloj_segundos_torneo: true },
+        });
+        socket.emit('reloj:estado_respuesta', {
+          activo: false,
+          segundosTorneo: torneo?.reloj_segundos_torneo ?? 0,
+        });
+      } catch (err) {
+        console.error('[reloj:estado] Error al leer segundosTorneo desde DB:', err.message);
+        socket.emit('reloj:estado_respuesta', { activo: false, segundosTorneo: 0 });
+      }
       return;
     }
 
+    // Reloj activo en memoria — usar el valor que ya lleva el contador en vivo
+    const nivelActual = estado.niveles[estado.nivelIndex] ?? null;
     socket.emit('reloj:estado_respuesta', {
       activo: true,
       nivelIndex: estado.nivelIndex,
       segundosRestantes: estado.segundosRestantes,
-      nivel: estado.niveles[estado.nivelIndex] ?? null,
-      total: estado.niveles[estado.nivelIndex]?.tiempo_segundos ?? 0,
+      nivel: nivelActual,
+      total: nivelActual?.tiempo_segundos ?? 0,
+      segundosTorneo: estado.segundosTorneo,
     });
   });
 };

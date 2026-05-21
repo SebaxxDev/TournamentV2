@@ -1,18 +1,19 @@
 import prisma from '../../config/db.js';
 
-// Mapa: idTorneo → { intervalo, socketIdOwner, segundosRestantes, nivelIndex }
+// Mapa: idTorneo → { intervalo, segundosRestantes, nivelIndex, segundosTorneo, niveles, setters }
 const relojesActivos = new Map();
 
 // Persiste el estado del reloj en la DB cada 5 segundos
 const INTERVALO_PERSISTENCIA = 5;
 
-const persistirEstado = async (idTorneo, segundosCiega, nivelIndex) => {
+const persistirEstado = async (idTorneo, segundosCiega, nivelIndex, segundosTorneo) => {
   try {
     await prisma.torneo.update({
       where: { id_torneo: idTorneo },
       data: {
-        reloj_segundos_ciega: segundosCiega,
-        reloj_nivel_index: nivelIndex,
+        reloj_segundos_ciega:  segundosCiega,
+        reloj_nivel_index:     nivelIndex,
+        reloj_segundos_torneo: segundosTorneo,
       },
     });
   } catch (err) {
@@ -34,7 +35,7 @@ export const registrarEventosReloj = (socket, io) => {
       const torneo = await prisma.torneo.findUnique({
         where: { id_torneo: id },
         include: {
-          poker: { include: { niveles: { orderBy: { numero_nivel: 'asc' } } } },
+          poker: { include: { niveles: { orderBy: { orden: 'asc' } } } },
         },
       });
 
@@ -51,6 +52,9 @@ export const registrarEventosReloj = (socket, io) => {
         torneo.reloj_segundos_ciega > 0
           ? torneo.reloj_segundos_ciega
           : nivelActual.tiempo_segundos;
+
+      // Restaurar tiempo acumulado del torneo desde la DB
+      let segundosTorneo = torneo.reloj_segundos_torneo ?? 0;
 
       let ticksPersistencia = 0;
 
@@ -78,6 +82,7 @@ export const registrarEventosReloj = (socket, io) => {
 
       const intervalo = setInterval(async () => {
         segundosRestantes--;
+        segundosTorneo++;
         ticksPersistencia++;
 
         // Emitir tick a todos en el room
@@ -90,7 +95,7 @@ export const registrarEventosReloj = (socket, io) => {
         // Persistir cada INTERVALO_PERSISTENCIA segundos
         if (ticksPersistencia >= INTERVALO_PERSISTENCIA) {
           ticksPersistencia = 0;
-          await persistirEstado(id, segundosRestantes, nivelIndex);
+          await persistirEstado(id, segundosRestantes, nivelIndex, segundosTorneo);
         }
 
         // Fin del nivel — avanzar automáticamente
@@ -101,7 +106,7 @@ export const registrarEventosReloj = (socket, io) => {
             // Terminaron todos los niveles — detener reloj
             clearInterval(intervalo);
             relojesActivos.delete(id);
-            await persistirEstado(id, 0, nivelIndex - 1);
+            await persistirEstado(id, 0, nivelIndex - 1, segundosTorneo);
             io.to(room).emit('reloj:fin_niveles');
             return;
           }
@@ -110,7 +115,7 @@ export const registrarEventosReloj = (socket, io) => {
           segundosRestantes = siguienteNivel.tiempo_segundos;
           ticksPersistencia = 0;
 
-          await persistirEstado(id, segundosRestantes, nivelIndex);
+          await persistirEstado(id, segundosRestantes, nivelIndex, segundosTorneo);
 
           io.to(room).emit('reloj:cambio_nivel', {
             nivelIndex,
@@ -122,11 +127,12 @@ export const registrarEventosReloj = (socket, io) => {
 
       relojesActivos.set(id, {
         intervalo,
-        nivelIndex,
-        get segundosRestantes() { return segundosRestantes; },
+        get nivelIndex()         { return nivelIndex; },
+        get segundosRestantes()  { return segundosRestantes; },
+        get segundosTorneo()     { return segundosTorneo; },
         niveles,
         // Exponer setters para que control.js pueda modificar estado
-        setNivelIndex: (v) => { nivelIndex = v; },
+        setNivelIndex:        (v) => { nivelIndex = v; },
         setSegundosRestantes: (v) => { segundosRestantes = v; },
       });
 
@@ -136,6 +142,7 @@ export const registrarEventosReloj = (socket, io) => {
         segundosRestantes,
         nivel: nivelActual,
         total: nivelActual.tiempo_segundos,
+        segundosTorneo,
       });
 
     } catch (err) {
@@ -156,7 +163,7 @@ export const registrarEventosReloj = (socket, io) => {
     clearInterval(estado.intervalo);
     relojesActivos.delete(id);
 
-    await persistirEstado(id, estado.segundosRestantes, estado.nivelIndex);
+    await persistirEstado(id, estado.segundosRestantes, estado.nivelIndex, estado.segundosTorneo);
 
     await prisma.$transaction([
       prisma.torneo.update({

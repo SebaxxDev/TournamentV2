@@ -343,6 +343,7 @@ model Inscripcion {
   monto_premio         Int               @default(0)
   ronda_eliminacion    String?           @db.VarChar(50)
   tiene_free_chip      Boolean           @default(false)
+  tiene_addon          Boolean           @default(false)
   historial_rebuys     Json              @default("[]")
   fecha_eliminacion    DateTime?
   id_staff_eliminacion Int?
@@ -441,6 +442,7 @@ model Poker {
 model PokerNivel {
   id_nivel        Int       @id @default(autoincrement())
   id_poker        Int
+  orden           Int       @default(0)
   numero_nivel    Int
   tipo            TipoNivel @default(NIVEL)
   sb              Int       @default(0)
